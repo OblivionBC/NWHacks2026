@@ -1,10 +1,26 @@
 import { useMemo, useState } from 'react';
+import branchLogo from './branch.svg';
 import './App.css';
 
 const PROJECTS = [
   { id: 'proj-1', name: 'nwHacks2026 Brainstorming' },
   { id: 'proj-2', name: 'school project brainstorming' },
   { id: 'proj-3', name: 'exam preparation' },
+];
+
+const HOME_FEATURES = [
+  {
+    title: 'Save points',
+    body: 'Capture checkpoints mid-convo so you can branch later without losing context.',
+  },
+  {
+    title: 'Branch boldly',
+    body: 'Fork new directions in parallel and explore ideas like GitFlow for chats.',
+  },
+  {
+    title: 'Compare + merge',
+    body: 'Line up outcomes, keep the best path, and jump back to any version instantly.',
+  },
 ];
 
 function App() {
@@ -77,19 +93,45 @@ function App() {
   }, [view, projectPage]);
 
   const renderHome = () => (
-    <div className="section">
-      <p className="eyebrow">Welcome back</p>
-      <h1>Home</h1>
-      <p className="muted">
-        Use the navigation to explore your projects or jump into a new chat session.
-      </p>
-      <div className="cta-row">
-        <button className="button primary" onClick={showProjects}>
-          View projects
-        </button>
-        <button className="button ghost" onClick={createNewProject}>
-          Create new project
-        </button>
+    <div className="home">
+      <div className="hero">
+        <div className="hero-header">
+          <div className="logo-mark">
+            <img src={branchLogo} alt="ThoughtTree branch logo" />
+          </div>
+          <div>
+            <p className="eyebrow">ThoughtTree</p>
+            <h1>Conversations that branch like code.</h1>
+          </div>
+        </div>
+        <p className="lead">
+          Our AI chat treats conversations like version-controlled code. Drop save points, branch off,
+          compare outcomes, and return to any version instantly — perfect for brainstorming, learning, writing,
+          and problem-solving.
+        </p>
+        <div className="pill-row">
+          <span className="pill">Save</span>
+          <span className="pill">Branch</span>
+          <span className="pill">Compare</span>
+          <span className="pill">Merge</span>
+        </div>
+        <div className="cta-row">
+          <button className="button primary" onClick={createNewProject}>
+            Start a new project
+          </button>
+          <button className="button ghost" onClick={showProjects}>
+            Browse projects
+          </button>
+        </div>
+      </div>
+
+      <div className="home-grid">
+        {HOME_FEATURES.map((item) => (
+          <div key={item.title} className="home-card">
+            <p className="feature-title">{item.title}</p>
+            <p className="muted">{item.body}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -139,7 +181,10 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">NWHacks</div>
+        <div className="brand">
+          <img className="brand-logo" src={branchLogo} alt="ThoughtTree logo" />
+          <span>ThoughtTree</span>
+        </div>
         <nav className="nav">
           {navItems.map((item) => {
             const classes = ['nav-item'];
