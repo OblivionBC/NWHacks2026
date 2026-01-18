@@ -58,6 +58,11 @@ function App() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // State for editing project names
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editedProjectName, setEditedProjectName] = useState('');
+  const [isUpdatingProject, setIsUpdatingProject] = useState(false);
+
   // API Helper Functions
   const fetchProjects = useCallback(async () => {
     try {
@@ -282,6 +287,36 @@ function App() {
     return response.json();
   };
 
+  const updateChatAPI = async (chatId, title) => {
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update chat');
+    }
+    return response.json();
+  };
+
+  const updateProjectAPI = async (projectId, name, description) => {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, description }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update project');
+    }
+    return response.json();
+  };
+
   // Generate AI Response using Gemini API
   const generateAIResponseAPI = async (chatId, userMessage) => {
     try {
@@ -360,8 +395,9 @@ function App() {
       // Get the last node ID for parentId (or null if first message)
       const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
       const parentId = lastNode ? lastNode.id : null;
+      const isFirstMessage = !parentId;
 
-      // Create USER node
+      // Create USER node (backend will auto-name chat if this is first message)
       const userNode = await createNodeAPI(selectedChatId, 'USER', messageContent, parentId);
 
       // Immediately add the user node to the UI for instant feedback
@@ -375,6 +411,18 @@ function App() {
         timestamp: new Date().toISOString(),
         metadata: {}
       }]);
+
+      // If this is the first message, refresh chats after a delay to get the auto-generated title
+      // The title generation happens asynchronously in the backend, so we poll for updates
+      if (isFirstMessage && selectedProjectId) {
+        // Refresh immediately (in case it's fast)
+        fetchProjectChats(selectedProjectId);
+        
+        // Also refresh after a delay to catch the async title update
+        setTimeout(() => {
+          fetchProjectChats(selectedProjectId);
+        }, 2000); // 2 second delay should be enough for Gemini to generate the title
+      }
 
       // Generate AI response using Gemini API
       const aiResponse = await generateAIResponseAPI(selectedChatId, messageContent);
@@ -392,6 +440,64 @@ function App() {
     } finally {
       setIsSendingMessage(false);
     }
+  };
+
+  const handleUpdateChatTitle = async (newTitle) => {
+    if (!selectedChatId) {
+      return;
+    }
+    try {
+      const updatedChat = await updateChatAPI(selectedChatId, newTitle);
+      // Update local chats state
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChatId ? updatedChat : chat
+      ));
+    } catch (error) {
+      console.error('Error updating chat title:', error);
+      throw error;
+    }
+  };
+
+  const handleStartEditProject = (projectId, currentName) => {
+    setEditingProjectId(projectId);
+    setEditedProjectName(currentName);
+  };
+
+  const handleSaveProjectName = async (projectId) => {
+    if (!editedProjectName.trim()) {
+      const project = projects.find(p => p.id === projectId);
+      setEditedProjectName(project?.name || '');
+      setEditingProjectId(null);
+      return;
+    }
+
+    if (editedProjectName.trim() === projects.find(p => p.id === projectId)?.name) {
+      setEditingProjectId(null);
+      return;
+    }
+
+    setIsUpdatingProject(true);
+    try {
+      const project = projects.find(p => p.id === projectId);
+      const updatedProject = await updateProjectAPI(projectId, editedProjectName.trim(), project?.description);
+      // Update local projects state
+      setProjects(prev => prev.map(p => 
+        p.id === projectId ? updatedProject : p
+      ));
+      setEditingProjectId(null);
+    } catch (error) {
+      console.error('Error updating project name:', error);
+      alert(error.message || 'Failed to update project name');
+      const project = projects.find(p => p.id === projectId);
+      setEditedProjectName(project?.name || '');
+    } finally {
+      setIsUpdatingProject(false);
+    }
+  };
+
+  const handleCancelEditProject = () => {
+    setEditingProjectId(null);
+    setEditedProjectName('');
   };
 
   const handleToggleFlag = async (nodeId, currentFlagState) => {
@@ -567,16 +673,21 @@ function App() {
       projects.forEach((project) => {
         const isExpanded = expandedProjectId === project.id;
         const isSelected = selectedProjectId === project.id;
+        const isEditing = editingProjectId === project.id;
         
         // Add project item
         items.push({
           id: project.id,
           label: project.name,
-          onClick: () => goToProject(project.id),
+          onClick: isEditing ? undefined : () => goToProject(project.id),
           active: isSelected,
           kind: 'project',
           expanded: isExpanded,
           onDelete: () => handleDeleteProject(project.id),
+          isEditing: isEditing,
+          onEdit: () => handleStartEditProject(project.id, project.name),
+          onSave: () => handleSaveProjectName(project.id),
+          onCancel: handleCancelEditProject,
         });
 
         // If this project is expanded, show its chats nested underneath
@@ -646,20 +757,25 @@ function App() {
     selectedProjectId, 
     expandedProjectId,
     projects, 
+    editingProjectId,
     handleDeleteProject, 
     handleDeleteChat,
     handleCreateNewChat,
     selectChat,
     goToProject,
-    createNewProject
+    createNewProject,
+    handleStartEditProject,
+    handleSaveProjectName,
+    handleCancelEditProject
   ]);
 
   const renderAuth = () => (
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-logo">
-          <img src={branchLogo} alt="ThoughtTree logo" />
-          <span>ThoughtTree</span>
+          <span>Though</span>
+          <img className="auth-logo-inline" src="/LogoT.png" alt="T" />
+          <span>ree</span>
         </div>
         <p className="muted small">Please log in to continue.</p>
         <form className="auth-form" onSubmit={handleLogin}>
@@ -796,6 +912,7 @@ function App() {
             nodes={nodes}
             onSendMessage={handleSendMessage}
             onToggleFlag={handleToggleFlag}
+            onUpdateTitle={handleUpdateChatTitle}
             isLoading={isSendingMessage}
           />
         );
@@ -871,8 +988,9 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <img className="brand-logo" src={branchLogo} alt="ThoughtTree logo" />
-          <span>ThoughtTree</span>
+          <span>Though</span>
+          <img className="brand-logo-inline" src="/LogoT.png" alt="T" />
+          <span>ree</span>
         </div>
         <nav className="nav">
           {navItems.map((item) => {
@@ -900,12 +1018,60 @@ function App() {
 
             // Check if item has delete handler (project or chat)
             if (item.onDelete) {
+              // If editing, show input field
+              if (item.isEditing) {
+                return (
+                  <div key={item.id} className={classes.join(' ')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                    <input
+                      type="text"
+                      value={editedProjectName}
+                      onChange={(e) => setEditedProjectName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          item.onSave();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          item.onCancel();
+                        }
+                      }}
+                      onBlur={item.onSave}
+                      disabled={isUpdatingProject}
+                      className="nav-item-input"
+                      autoFocus
+                      style={{ flex: 1, padding: '4px 8px', fontSize: '14px' }}
+                    />
+                    <button
+                      type="button"
+                      className="nav-item-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        item.onCancel();
+                      }}
+                      aria-label="Cancel editing"
+                      title="Cancel editing"
+                      disabled={isUpdatingProject}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
+
+              // Regular project/chat item with delete button
               return (
                 <button
                   key={item.id}
                   type="button"
                   className={classes.join(' ')}
                   onClick={item.onClick}
+                  onContextMenu={(e) => {
+                    if (item.kind === 'project') {
+                      e.preventDefault();
+                      item.onEdit();
+                    }
+                  }}
+                  title={item.kind === 'project' ? 'Right-click to edit' : undefined}
                 >
                   <span>{item.label}</span>
                   <button
