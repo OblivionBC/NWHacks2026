@@ -136,21 +136,13 @@ body {
 }
 
 .brand-logo-inline {
-  width: 0.75em;
-  height: 1.3em;
+  max-width: 100%;
+  height: auto;
+  max-height: 48px;
   display: inline-block;
   vertical-align: middle;
   object-fit: contain;
   margin: 0;
-}
-
-.brand::after {
-  content: '';
-  height: 3px;
-  width: 32px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--pink), var(--mint));
-  opacity: 0.9;
 }
 
 .nav {
@@ -494,21 +486,20 @@ body {
 }
 
 .logo-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
 }
 
 .logo-mark img {
-  width: 28px;
-  height: 28px;
+  max-width: 100%;
+  height: auto;
+  max-height: 44px;
+  display: inline-block;
+  vertical-align: middle;
   object-fit: contain;
-  filter: invert(100%) brightness(1.1);
+  margin: 0;
 }
 
 .lead {
@@ -634,10 +625,15 @@ body {
 .auth-logo {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+}
+
+.auth-logo img {
+  max-width: 100%;
+  height: auto;
+  max-height: 40px;
+  object-fit: contain;
 }
 
 .auth-logo-inline {
