@@ -275,7 +275,6 @@ body {
 .nav-item.active {
   border-color: var(--brilliant-azure);
   background: linear-gradient(135deg, rgba(48, 131, 220, 0.35), rgba(124, 107, 255, 0.22));
-  transform: translateX(12px);
   box-shadow: 0 12px 28px rgba(48, 131, 220, 0.25);
 }
 
