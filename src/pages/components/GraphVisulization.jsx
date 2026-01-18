@@ -4,8 +4,8 @@ import * as d3 from 'd3';
 export default function TreeGraph(props) {
     const {data, onNodeClick, currentNodeId} = props
     const svgRef = useRef();
-    const width = 600;
-    const height = 800;
+    const width = 700;
+    const height = 1000;
     const margin = { top: 30, right: 50, bottom: 30, left: 50 };
 
    const generateSVGGraph = useCallback((data) => {
@@ -82,8 +82,20 @@ export default function TreeGraph(props) {
 
     nodeSelection.append("circle")
         .attr("fill", d => d.id === currentNodeId ? "#555" : "#999")
-        .attr("stroke", "#FFFF00").attr("stroke-width", d => d.id === currentNodeId ? 1 : 0) 
-        .attr("r", 6);
+        .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "#FFFF00")
+        .attr("stroke-width", d => 
+            d.data.id === currentNodeId || d.data.isFlagged ? 1 : 0                             
+        )
+        .attr("r", d => d.data.isFlagged ? 12 : 6)
+
+     nodeSelection.append("text")
+        .attr("dy", "0.35em") // Vertical center
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "10px")
+        .style("font-weight", "bold")
+        .style("pointer-events", "none")
+        .text(d => d.data.isFlagged ? '🏳️': '');
 
     // --- FIX 2: CORRECT TEXT ACCESSOR ---
     nodeSelection.append("text")
