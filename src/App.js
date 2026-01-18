@@ -4,6 +4,7 @@ import './App.css';
 import CreateProjectModal from './components/CreateProjectModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import ChatInterface from './components/ChatInterface';
+import VersionControlTimeline from './pages/VersionControlTimeline';
 
 const HOME_FEATURES = [
   {
@@ -696,23 +697,24 @@ function App() {
             {loadingNodes ? (
               <div className="placeholder">Loading history...</div>
             ) : nodes.length > 0 ? (
-              <ul className="history-list">
-                {nodes.map((node) => {
-                  const date = new Date(node.timestamp);
-                  const dateStr = date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                  });
-                  const contentPreview =
-                    node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
-                  return (
-                    <li key={node.id}>
-                      {dateStr} — [{node.type}] {contentPreview}
-                    </li>
-                  );
-                })}
-              </ul>
+              // <ul className="history-list">
+              //   {nodes.map((node) => {
+              //     const date = new Date(node.timestamp);
+              //     const dateStr = date.toLocaleDateString('en-US', {
+              //       year: 'numeric',
+              //       month: '2-digit',
+              //       day: '2-digit',
+              //     });
+              //     const contentPreview =
+              //       node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
+              //     return (
+              //       <li key={node.id}>
+              //         {dateStr} — [{node.type}] {contentPreview}
+              //       </li>
+              //     );
+              //   })}
+              // </ul>
+              <VersionControlTimeline chatId={selectedChatId}/>
             ) : (
               <div className="placeholder">No history available for this chat.</div>
             )}
