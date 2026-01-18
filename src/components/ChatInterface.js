@@ -40,7 +40,10 @@ function ChatInterface({ chatId, nodes, onSendMessage, isLoading }) {
           </div>
         ) : (
           nodes.map((node) => (
-            <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
+            <div
+              key={node.id}
+              className={`message ${node.type.toLowerCase()}`}
+            >
               <div className="message-header">
                 <span className="message-type">{node.type}</span>
               </div>

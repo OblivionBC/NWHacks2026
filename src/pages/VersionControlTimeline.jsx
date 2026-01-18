@@ -2,7 +2,7 @@ import GraphVisualization from "./components/GraphVisulization";
 import {useEffect, useState} from "react"
 
 export default function VersionControlTimeline(props){
-    const {chatId} = props
+    const {chatId, onNodeClick, currentNodeId} = props
     const [treeData, setTreeData] = useState()
 
     const fetchData = async (chatId) =>{
@@ -29,7 +29,7 @@ export default function VersionControlTimeline(props){
     return(
     <>
         <h1>Version Control graph</h1>
-        <GraphVisualization data={treeData}/>
+        <GraphVisualization data={treeData} onNodeClick={onNodeClick} currentNodeId={currentNodeId}/>
     </>
     )
 }
