@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
+import mongoose from 'mongoose';
+import Conversation from './models/Conversation.js';
 
 dotenv.config();
 
@@ -14,6 +16,11 @@ app.use(express.json());
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('MongoDB connection error:', err));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
@@ -41,6 +48,102 @@ app.post('/api/chat', async (req, res) => {
     console.error('Error calling OpenAI:', error);
     const errorMessage = error.message || 'Failed to generate response';
     res.status(500).json({ error: errorMessage });
+  }
+});
+
+// Save conversation
+app.post('/api/conversations', async (req, res) => {
+  try {
+    const { title, nodes, currentNodeId, rootId } = req.body;
+
+    const conversation = new Conversation({
+      title,
+      nodes: new Map(nodes),
+      currentNodeId,
+      rootId,
+    });
+
+    await conversation.save();
+    res.json({ id: conversation._id, message: 'Conversation saved successfully' });
+  } catch (error) {
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+// Get all conversations
+app.get('/api/conversations', async (req, res) => {
+  try {
+    const conversations = await Conversation.find()
+      .select('_id title createdAt updatedAt')
+      .sort({ updatedAt: -1 });
+    res.json(conversations);
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
+
+// Get specific conversation
+app.get('/api/conversations/:id', async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const nodesArray = Array.from(conversation.nodes.entries());
+    res.json({
+      id: conversation._id,
+      title: conversation.title,
+      nodes: nodesArray,
+      currentNodeId: conversation.currentNodeId,
+      rootId: conversation.rootId,
+    });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
+  }
+});
+
+// Update conversation
+app.put('/api/conversations/:id', async (req, res) => {
+  try {
+    const { title, nodes, currentNodeId, rootId } = req.body;
+
+    const conversation = await Conversation.findByIdAndUpdate(
+      req.params.id,
+      {
+        title,
+        nodes: new Map(nodes),
+        currentNodeId,
+        rootId,
+      },
+      { new: true }
+    );
+
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    res.json({ message: 'Conversation updated successfully' });
+  } catch (error) {
+    console.error('Error updating conversation:', error);
+    res.status(500).json({ error: 'Failed to update conversation' });
+  }
+});
+
+// Delete conversation
+app.delete('/api/conversations/:id', async (req, res) => {
+  try {
+    const conversation = await Conversation.findByIdAndDelete(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    res.json({ message: 'Conversation deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });
 
