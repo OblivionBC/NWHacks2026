@@ -2,11 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 
 export default function TreeGraph(props) {
-    const {data} = props
+    const {data, onNodeClick, currentNodeId} = props
     const svgRef = useRef();
-    const width = 600;
-    const height = 400;
-    const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+    const width = 700;
+    const height = 1000;
+    const margin = { top: 30, right: 50, bottom: 30, left: 50 };
 
    const generateSVGGraph = useCallback((data) => {
     if (!data || !data.nodes) return;
@@ -60,11 +60,42 @@ export default function TreeGraph(props) {
         .selectAll("g")
         .data(root.descendants())
         .join("g")
-        .attr("transform", d => `translate(${d.x},${d.y})`);
+        .attr("transform", d => `translate(${d.x},${d.y})`)
+        .style("cursor", (d) => {
+        // 'd.data' is your original node object
+        // Example: only show pointer for "AI" type nodes
+        return d.data.type === "AI" ? "pointer" : "default";
+        })
+        .on("click", function(event, d) {
+            if(d.data.type === "AI"){
+                // Remove previous selection highlights
+                chartContainer.selectAll("circle").attr("stroke", "none").attr("stroke-width", 0);
+                // Highlight clicked node
+                d3.select(this).select("circle").attr("stroke", "#ff6b6b").attr("stroke-width", 2);
+                console.log("Clicked node:", d.data);
+                // Emit the node click event
+                if(onNodeClick) {
+                    onNodeClick(d.data.id);
+                }
+            }
+        });
 
     nodeSelection.append("circle")
-        .attr("fill", d => d.children ? "#555" : "#999") 
-        .attr("r", 6);
+        .attr("fill", d => d.id === currentNodeId ? "#555" : "#999")
+        .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "#FFFF00")
+        .attr("stroke-width", d => 
+            d.data.id === currentNodeId || d.data.isFlagged ? 1 : 0                             
+        )
+        .attr("r", d => d.data.isFlagged ? 12 : 6)
+
+     nodeSelection.append("text")
+        .attr("dy", "0.35em") // Vertical center
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "10px")
+        .style("font-weight", "bold")
+        .style("pointer-events", "none")
+        .text(d => d.data.isFlagged ? '🏳️': '');
 
     // --- FIX 2: CORRECT TEXT ACCESSOR ---
     nodeSelection.append("text")
@@ -72,7 +103,7 @@ export default function TreeGraph(props) {
         .attr("y", d => d.children ? -15 : 15) 
         .attr("text-anchor", "middle")
         .text(d => d.data.content) // d.data is the original node object
-        .attr("fill", "white")
+        .attr("fill", d => d.id === currentNodeId ? "yellow" : "white")
         .style("font-size", "10px")
         // Optional: Simple text truncation for long content
         .each(function(d) {
