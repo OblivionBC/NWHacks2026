@@ -1,9 +1,11 @@
 import GraphVisualization from "./components/GraphVisulization";
 import {useEffect, useState} from "react"
+import "./VersionControlTimeline.css"
 
 export default function VersionControlTimeline(props){
     const {chatId, onNodeClick, currentNodeId} = props
     const [treeData, setTreeData] = useState()
+    const [collapseFlags, setCollapseFlags] = useState(false)
 
     const fetchData = async (chatId) =>{
         if(chatId){}
@@ -28,8 +30,24 @@ export default function VersionControlTimeline(props){
 
     return(
     <>
-        <h1>Version Control graph</h1>
-        <GraphVisualization data={treeData} onNodeClick={onNodeClick} currentNodeId={currentNodeId}/>
+        <div className="version-control-header">
+            <h1>Version Control graph</h1>
+            <label className="toggle-switch">
+                <input 
+                    type="checkbox" 
+                    checked={collapseFlags}
+                    onChange={(e) => setCollapseFlags(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">Collapse Flags</span>
+            </label>
+        </div>
+        <GraphVisualization 
+            data={treeData} 
+            onNodeClick={onNodeClick} 
+            currentNodeId={currentNodeId}
+            collapseFlags={collapseFlags}
+        />
     </>
     )
 }
