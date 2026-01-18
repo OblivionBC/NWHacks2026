@@ -206,11 +206,19 @@ export default function TreeGraph(props) {
         }
         return "#999"; // Light Gray for Regular Nodes
     })
-    .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "lightblue")
+    .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "#4682B4")
     .attr("stroke-width", d => 
-        d.data.id === currentNodeId || d.data.isFlagged ? 1 : 0                             
+        d.data.id === currentNodeId || d.data.isFlagged ? 2 : 0                             
     )
-    .attr("r", d => d.data.isFlagged ? 12 : 6)
+    .attr("r", d => {
+        if (d.data.id === currentNodeId) {
+            return 8;
+        }
+        if (d.data.isFlagged) {
+            return 12;
+        }
+        return 6;
+    })
 
      nodeSelection.append("text")
         .attr("dy", "0.35em") // Vertical center
