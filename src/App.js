@@ -247,9 +247,33 @@ function App() {
     return response.json();
   };
 
-  // Mock AI Response Generator
-  const generateMockAIResponse = (userMessage) => {
-    return `I understand you said: "${userMessage}". How can I help you further?`;
+  // Generate AI Response using Gemini API
+  const generateAIResponseAPI = async (chatId, userMessage) => {
+    try {
+      console.log('Calling Gemini API...', { chatId, userMessage });
+      const response = await fetch(`${API_BASE_URL}/messages/ai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ chatId, userMessage }),
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('API error response:', error);
+        throw new Error(error.error || error.message || 'Failed to generate AI response');
+      }
+
+      const data = await response.json();
+      console.log('AI response received:', data);
+      return data.response;
+    } catch (error) {
+      console.error('Error in generateAIResponseAPI:', error);
+      throw error;
+    }
   };
 
   // Handlers
@@ -305,17 +329,31 @@ function App() {
       // Create USER node
       const userNode = await createNodeAPI(selectedChatId, 'USER', messageContent, parentId);
 
-      // Generate mock AI response
-      const aiResponse = generateMockAIResponse(messageContent);
+      // Immediately add the user node to the UI for instant feedback
+      setNodes(prev => [...prev, {
+        id: userNode.id,
+        chatId: selectedChatId,
+        parentId: parentId,
+        type: 'USER',
+        content: messageContent,
+        isFlagged: false,
+        timestamp: new Date().toISOString(),
+        metadata: {}
+      }]);
+
+      // Generate AI response using Gemini API
+      const aiResponse = await generateAIResponseAPI(selectedChatId, messageContent);
 
       // Create AI node with the USER node as parent
       await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
 
-      // Refresh nodes to show new messages
+      // Refresh nodes to show new messages (including the AI response)
       await fetchChatNodes(selectedChatId);
     } catch (error) {
       console.error('Error sending message:', error);
       alert(error.message || 'Failed to send message');
+      // Refresh to show correct state if there was an error
+      await fetchChatNodes(selectedChatId);
     } finally {
       setIsSendingMessage(false);
     }

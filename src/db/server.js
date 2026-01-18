@@ -14,7 +14,8 @@ const {
   deleteChat,
   getChatNodes,
   createNode,
-  updateNode
+  updateNode,
+  generateAIMessage
 } = require('./db-routes');
 
 const app = express();
@@ -53,6 +54,10 @@ app.post('/api/nodes', createNode);
 
 // PATCH /api/nodes/:id - Toggle flags or update content
 app.patch('/api/nodes/:id', updateNode);
+
+// ==================== AI MESSAGE ROUTES ====================
+// POST /api/messages/ai - Generate AI response using Gemini
+app.post('/api/messages/ai', generateAIMessage);
 
 // Start server
 app.listen(PORT, () => {
