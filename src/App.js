@@ -1,5 +1,4 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import branchLogo from './branch.svg';
 import './App.css';
 import CreateProjectModal from './components/CreateProjectModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
@@ -838,9 +837,7 @@ function App() {
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-logo">
-          <span>Though</span>
-          <img className="auth-logo-inline" src="/LogoT.png" alt="T" />
-          <span>ree</span>
+          <img src="/LogoT.png" alt="ThoughTree logo" />
         </div>
         <p className="muted small">Please log in to continue.</p>
         <form className="auth-form" onSubmit={handleLogin}>
@@ -877,10 +874,9 @@ function App() {
       <div className="hero">
         <div className="hero-header">
           <div className="logo-mark">
-            <img src={branchLogo} alt="ThoughtTree branch logo" />
+            <img src="/LogoT.png" alt="ThoughtTree branch logo" />
           </div>
           <div>
-            <p className="eyebrow">ThoughtTree</p>
             <h1>Conversations that branch like code.</h1>
           </div>
         </div>
@@ -1053,9 +1049,7 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span>Though</span>
-          <img className="brand-logo-inline" src="/LogoT.png" alt="T" />
-          <span>ree</span>
+          <img className="brand-logo-inline" src="/LogoT.png" alt="ThoughtTree logo" />
         </div>
         <nav className="nav">
           {navItems.map((item) => {

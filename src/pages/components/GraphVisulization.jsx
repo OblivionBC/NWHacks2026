@@ -2,16 +2,32 @@ import { useEffect, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 
 export default function TreeGraph(props) {
-    const {data, onNodeClick, currentNodeId} = props
+    const {data, onNodeClick, currentNodeId, collapseFlags} = props
     const svgRef = useRef();
+    const previousCollapseFlagsRef = useRef(collapseFlags);
+    const savedZoomTransformRef = useRef(d3.zoomIdentity);
     const width = 700;
     const height = 1000;
     const margin = { top: 30, right: 50, bottom: 30, left: 50 };
 
-   const generateSVGGraph = useCallback((data) => {
+   const generateSVGGraph = useCallback((data, collapseFlags, shouldResetZoom) => {
     if (!data || !data.nodes) return;
 
     const svg = d3.select(svgRef.current);
+    
+    // Try to get current zoom transform from the SVG element before removing children
+    let currentTransform = null;
+    try {
+        currentTransform = d3.zoomTransform(svg.node());
+    } catch (e) {
+        // Transform might not exist yet
+    }
+    
+    // Save transform if it exists and we're not resetting
+    if (currentTransform && !shouldResetZoom && currentTransform !== d3.zoomIdentity) {
+        savedZoomTransformRef.current = currentTransform;
+    }
+    
     svg.selectAll("*").remove(); 
     svg.attr("viewBox", [0, 0, width, height]);
 
@@ -40,18 +56,89 @@ export default function TreeGraph(props) {
     const zoomBehavior = d3.zoom()
         .scaleExtent([0.5, 5])
         .on("zoom", (event) => {
+            savedZoomTransformRef.current = event.transform;
             viewport.attr("transform", event.transform);
         });
 
     svg.call(zoomBehavior);
+    
+    // Restore zoom transform or reset if collapseFlags changed
+    if (shouldResetZoom) {
+        svg.call(zoomBehavior.transform, d3.zoomIdentity);
+        savedZoomTransformRef.current = d3.zoomIdentity;
+    } else {
+        // Restore the saved transform
+        const transformToRestore = savedZoomTransformRef.current || d3.zoomIdentity;
+        svg.call(zoomBehavior.transform, transformToRestore);
+        viewport.attr("transform", transformToRestore);
+    }
 
-    // --- FIX 1: STRATIFY THE DATA ---
+    // Build original hierarchy to identify leaf nodes
+    const originalStratify = d3.stratify()
+        .id(d => d.id)
+        .parentId(d => d.parentId);
+    
+    const originalRoot = originalStratify(data.nodes);
+    
+    // Identify leaf nodes (nodes with no children)
+    const leafNodeIds = new Set();
+    originalRoot.each(d => {
+        if (!d.children || d.children.length === 0) {
+            leafNodeIds.add(d.id);
+        }
+    });
+
+    // Filter nodes if collapseFlags is enabled
+    let nodesToUse = data.nodes;
+    if (collapseFlags) {
+        // Keep: root nodes (parentId === null), flagged nodes, and leaf nodes
+        const visibleNodeIds = new Set();
+        
+        // First pass: identify all nodes to keep
+        data.nodes.forEach(node => {
+            if (node.parentId === null || node.isFlagged || leafNodeIds.has(node.id)) {
+                visibleNodeIds.add(node.id);
+            }
+        });
+
+        // Second pass: reconstruct parent-child relationships
+        // For each visible node, find its nearest visible ancestor
+        const nodeMap = new Map(data.nodes.map(n => [n.id, n]));
+        const filteredNodes = [];
+        
+        visibleNodeIds.forEach(nodeId => {
+            const node = nodeMap.get(nodeId);
+            if (!node) return;
+            
+            // Find nearest visible ancestor
+            let current = node;
+            let nearestVisibleParentId = null;
+            
+            while (current.parentId !== null) {
+                if (visibleNodeIds.has(current.parentId)) {
+                    nearestVisibleParentId = current.parentId;
+                    break;
+                }
+                current = nodeMap.get(current.parentId);
+                if (!current) break;
+            }
+            
+            filteredNodes.push({
+                ...node,
+                parentId: nearestVisibleParentId
+            });
+        });
+        
+        nodesToUse = filteredNodes;
+    }
+
+    // --- STRATIFY THE DATA ---
     // d3.stratify converts flat arrays with 'id' and 'parentId' into a hierarchy
     const stratify = d3.stratify()
         .id(d => d.id)
         .parentId(d => d.parentId);
 
-    const root = stratify(data.nodes);
+    const root = stratify(nodesToUse);
 
     const treeLayout = d3.tree()
         .size([
@@ -175,15 +262,17 @@ export default function TreeGraph(props) {
             return text.length > 20 ? text.substring(0, 20) + "..." : text;
         });
 
-}, [margin, width, height]);
+}, [margin, width, height, onNodeClick, currentNodeId]);
 
    useEffect(() => {
     if(data?.nodes?.length > 0){
-        generateSVGGraph(data)
+        const collapseFlagsChanged = previousCollapseFlagsRef.current !== collapseFlags;
+        previousCollapseFlagsRef.current = collapseFlags;
+        generateSVGGraph(data, collapseFlags, collapseFlagsChanged)
     }
    
 
-}, [data, generateSVGGraph]);
+}, [data, collapseFlags, generateSVGGraph]);
 
     return (
     <>
