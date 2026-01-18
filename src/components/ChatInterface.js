@@ -1,8 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import './ChatInterface.css';
 
-function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, isLoading }) {
+function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, isLoading, onUpdateTitle }) {
   const [message, setMessage] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(chatTitle || '');
+  const [isUpdatingTitle, setIsUpdatingTitle] = useState(false);
+  const titleInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const prevNodesLengthRef = useRef(0);
 
@@ -18,6 +23,66 @@ function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, 
     }
     prevNodesLengthRef.current = nodes.length;
   }, [nodes]);
+
+  // Update editedTitle when chatTitle prop changes
+  useEffect(() => {
+    setEditedTitle(chatTitle || '');
+  }, [chatTitle]);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleTitleClick = () => {
+    setIsEditingTitle(true);
+    setEditedTitle(chatTitle || '');
+  };
+
+  const handleTitleSave = async () => {
+    if (!editedTitle.trim()) {
+      setEditedTitle(chatTitle || '');
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (editedTitle.trim() === chatTitle) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    setIsUpdatingTitle(true);
+    try {
+      if (onUpdateTitle) {
+        await onUpdateTitle(editedTitle.trim());
+      }
+      setIsEditingTitle(false);
+    } catch (error) {
+      console.error('Error updating title:', error);
+      alert(error.message || 'Failed to update title');
+      setEditedTitle(chatTitle || '');
+    } finally {
+      setIsUpdatingTitle(false);
+    }
+  };
+
+  const handleTitleCancel = () => {
+    setEditedTitle(chatTitle || '');
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleTitleCancel();
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -40,7 +105,27 @@ function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, 
   return (
     <div className="chat-interface">
       <div className="chat-header">
-        <h2 className="chat-title">{chatTitle || 'Untitled Chat'}</h2>
+        {isEditingTitle ? (
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={editedTitle}
+            onChange={(e) => setEditedTitle(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={handleTitleKeyDown}
+            disabled={isUpdatingTitle}
+            className="chat-title-input"
+            maxLength={100}
+          />
+        ) : (
+          <h2 
+            className="chat-title editable" 
+            onClick={handleTitleClick}
+            title="Click to edit title"
+          >
+            {chatTitle || 'Untitled Chat'}
+          </h2>
+        )}
       </div>
       <div className="chat-messages">
         {nodes.length === 0 ? (
@@ -49,23 +134,24 @@ function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, 
           </div>
         ) : (
           nodes.map((node) => (
-             
             <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
               <div className="message-header">
                 <span className="message-type">{node.type}</span>
-                 {node.type === 'AI' && node.parentId !== null && (
-                    <button
-                      type="button"
-                      className={`message-flag ${node.isFlagged ? 'flagged' : ''}`}
-                      onClick={() => onToggleFlag(node.id, node.isFlagged)}
-                      aria-label={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
-                      title={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
-                    >
-                      🏳️
-                    </button>
-                  )}
+                {node.type === 'AI' && node.parentId !== null && (
+                  <button
+                    type="button"
+                    className={`message-flag ${node.isFlagged ? 'flagged' : ''}`}
+                    onClick={() => onToggleFlag(node.id, node.isFlagged)}
+                    aria-label={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                    title={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                  >
+                    🏳️
+                  </button>
+                )}
               </div>
-              <div className="message-content">{node.content}</div>
+              <div className="message-content">
+                <ReactMarkdown>{node.content}</ReactMarkdown>
+              </div>
             </div>
           ))
         )}
