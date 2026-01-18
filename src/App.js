@@ -1,12 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import branchLogo from './branch.svg';
 import './App.css';
-
-const PROJECTS = [
-  { id: 'proj-1', name: 'nwHacks2026 Brainstorming' },
-  { id: 'proj-2', name: 'school project brainstorming' },
-  { id: 'proj-3', name: 'exam preparation' },
-];
+import CreateProjectModal from './components/CreateProjectModal';
+import DeleteConfirmationModal from './components/DeleteConfirmationModal';
+import ChatInterface from './components/ChatInterface';
 
 const HOME_FEATURES = [
   {
@@ -23,6 +20,8 @@ const HOME_FEATURES = [
   },
 ];
 
+const API_BASE_URL = 'http://localhost:3001/api';
+
 function App() {
   const [view, setView] = useState('home'); // 'home' | 'projects' | 'projectDetail'
   const [isAuthed, setIsAuthed] = useState(false);
@@ -31,10 +30,110 @@ function App() {
   const [authError, setAuthError] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [projectPage, setProjectPage] = useState('chat'); // 'chat' | 'history'
+  
+  // State for projects, chats, and nodes
+  const [projects, setProjects] = useState([]);
+  const [chats, setChats] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState(null);
+  const [nodes, setNodes] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingNodes, setLoadingNodes] = useState(false);
+
+  // State for project creation modal
+  const [showCreateProjectModal, setShowCreateProjectModal] = useState(false);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
+  const [createProjectError, setCreateProjectError] = useState('');
+
+  // State for chat creation
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+
+  // State for sending messages
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  // State for delete modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // API Helper Functions
+  const fetchProjects = useCallback(async () => {
+    try {
+      setLoadingProjects(true);
+      console.log('Calling fetchProjects, API URL:', `${API_BASE_URL}/projects`);
+      const response = await fetch(`${API_BASE_URL}/projects`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch projects');
+      }
+      const data = await response.json();
+      console.log('Projects fetched:', data);
+      setProjects(data);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      setProjects([]);
+    } finally {
+      setLoadingProjects(false);
+    }
+  }, []);
+
+  const fetchProjectChats = async (projectId) => {
+    try {
+      setLoadingChats(true);
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/chats`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch chats');
+      }
+      const data = await response.json();
+      setChats(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+      setChats([]);
+      return [];
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  const fetchChatNodes = async (chatId) => {
+    try {
+      setLoadingNodes(true);
+      const response = await fetch(`${API_BASE_URL}/chats/${chatId}/nodes`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch nodes');
+      }
+      const data = await response.json();
+      setNodes(data.nodes || []);
+      return data;
+    } catch (error) {
+      console.error('Error fetching nodes:', error);
+      setNodes([]);
+      return { nodes: [], links: [] };
+    } finally {
+      setLoadingNodes(false);
+    }
+  };
+
+  // Auto-load projects when authenticated and on home or projects page
+  useEffect(() => {
+    if (isAuthed && (view === 'home' || view === 'projects')) {
+      console.log('Fetching projects - isAuthed:', isAuthed, 'view:', view);
+      fetchProjects();
+    }
+  }, [isAuthed, view, fetchProjects]);
+
+  // Load nodes when chat is selected
+  useEffect(() => {
+    if (selectedChatId) {
+      fetchChatNodes(selectedChatId);
+    } else {
+      setNodes([]);
+    }
+  }, [selectedChatId]);
 
   const selectedProject = useMemo(
-    () => PROJECTS.find((p) => p.id === selectedProjectId) || null,
-    [selectedProjectId]
+    () => projects.find((p) => p.id === selectedProjectId) || null,
+    [projects, selectedProjectId]
   );
 
   const currentProjectTitle = useMemo(() => {
@@ -54,16 +153,171 @@ function App() {
     setProjectPage('chat');
   };
 
-  const goToProject = (projectId) => {
+  const goToProject = async (projectId) => {
     setSelectedProjectId(projectId);
     setView('projectDetail');
+    setProjectPage('chat');
+    setSelectedChatId(null);
+    setNodes([]);
+    
+    // Fetch chats for the project
+    const chatsData = await fetchProjectChats(projectId);
+    
+    // Auto-select the first chat if any exist
+    if (chatsData && chatsData.length > 0) {
+      setSelectedChatId(chatsData[0].id);
+    }
+  };
+
+  const selectChat = (chatId) => {
+    setSelectedChatId(chatId);
     setProjectPage('chat');
   };
 
   const createNewProject = () => {
-    setSelectedProjectId('new');
-    setView('projectDetail');
-    setProjectPage('chat');
+    setShowCreateProjectModal(true);
+  };
+
+  // API Functions
+  const createProjectAPI = async (name, description) => {
+    const response = await fetch(`${API_BASE_URL}/projects`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, description }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create project');
+    }
+    return response.json();
+  };
+
+  const createChatAPI = async (projectId, title) => {
+    const response = await fetch(`${API_BASE_URL}/chats`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ projectId, title }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create chat');
+    }
+    return response.json();
+  };
+
+  const createNodeAPI = async (chatId, type, content, parentId) => {
+    const response = await fetch(`${API_BASE_URL}/nodes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ chatId, type, content, parentId }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create node');
+    }
+    return response.json();
+  };
+
+  const deleteProjectAPI = async (projectId) => {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete project');
+    }
+    return response.json();
+  };
+
+  const deleteChatAPI = async (chatId) => {
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete chat');
+    }
+    return response.json();
+  };
+
+  // Mock AI Response Generator
+  const generateMockAIResponse = (userMessage) => {
+    return `I understand you said: "${userMessage}". How can I help you further?`;
+  };
+
+  // Handlers
+  const handleCreateProject = async (name, description) => {
+    setIsCreatingProject(true);
+    setCreateProjectError('');
+    try {
+      const newProject = await createProjectAPI(name, description);
+      setShowCreateProjectModal(false);
+      // Refresh projects list
+      await fetchProjects();
+      // Navigate to the new project
+      await goToProject(newProject.id);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      setCreateProjectError(error.message || 'Failed to create project');
+    } finally {
+      setIsCreatingProject(false);
+    }
+  };
+
+  const handleCreateNewChat = async () => {
+    if (!selectedProjectId || selectedProjectId === 'new') {
+      return;
+    }
+    setIsCreatingChat(true);
+    try {
+      const newChat = await createChatAPI(selectedProjectId, 'New Chat');
+      // Add chat to local state
+      setChats(prev => [newChat, ...prev]);
+      // Auto-select the new chat
+      setSelectedChatId(newChat.id);
+      // Fetch nodes for the new chat (will be empty initially)
+      await fetchChatNodes(newChat.id);
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      alert(error.message || 'Failed to create chat');
+    } finally {
+      setIsCreatingChat(false);
+    }
+  };
+
+  const handleSendMessage = async (messageContent) => {
+    if (!selectedChatId || !messageContent.trim()) {
+      return;
+    }
+    setIsSendingMessage(true);
+    try {
+      // Get the last node ID for parentId (or null if first message)
+      const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+      const parentId = lastNode ? lastNode.id : null;
+
+      // Create USER node
+      const userNode = await createNodeAPI(selectedChatId, 'USER', messageContent, parentId);
+
+      // Generate mock AI response
+      const aiResponse = generateMockAIResponse(messageContent);
+
+      // Create AI node with the USER node as parent
+      await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
+
+      // Refresh nodes to show new messages
+      await fetchChatNodes(selectedChatId);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert(error.message || 'Failed to send message');
+    } finally {
+      setIsSendingMessage(false);
+    }
   };
 
   const handleLogin = (e) => {
@@ -84,25 +338,178 @@ function App() {
     setView('home');
   };
 
+  // Delete handlers
+  const handleDeleteProject = async (projectId) => {
+    try {
+      // Fetch project details
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+
+      // Fetch chats for the project to count them
+      const chatsData = await fetchProjectChats(projectId);
+      let totalNodes = 0;
+
+      // Count nodes for each chat
+      for (const chat of chatsData) {
+        const nodesData = await fetchChatNodes(chat.id);
+        totalNodes += (nodesData.nodes || []).length;
+      }
+
+      // Open modal with deletion details
+      setDeleteTarget({
+        type: 'project',
+        id: projectId,
+        name: project.name,
+        chatCount: chatsData.length,
+        nodeCount: totalNodes,
+      });
+      setDeleteModalOpen(true);
+    } catch (error) {
+      console.error('Error preparing project deletion:', error);
+      alert('Failed to load project details for deletion');
+    }
+  };
+
+  const handleDeleteChat = async (chatId) => {
+    try {
+      // Fetch chat details
+      const chat = chats.find(c => c.id === chatId);
+      if (!chat) return;
+
+      // Count nodes for the chat
+      const nodesData = await fetchChatNodes(chatId);
+      const nodeCount = (nodesData.nodes || []).length;
+
+      // Open modal with deletion details
+      setDeleteTarget({
+        type: 'chat',
+        id: chatId,
+        name: chat.title || 'Untitled Chat',
+        nodeCount: nodeCount,
+      });
+      setDeleteModalOpen(true);
+    } catch (error) {
+      console.error('Error preparing chat deletion:', error);
+      alert('Failed to load chat details for deletion');
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      if (deleteTarget.type === 'project') {
+        // Delete project
+        await deleteProjectAPI(deleteTarget.id);
+
+        // Remove from local state
+        setProjects(prev => prev.filter(p => p.id !== deleteTarget.id));
+
+        // If deleting the current project, navigate to projects view
+        if (selectedProjectId === deleteTarget.id) {
+          setSelectedProjectId(null);
+          setView('projects');
+          setSelectedChatId(null);
+          setNodes([]);
+          setChats([]);
+        }
+
+        // Refresh projects list
+        await fetchProjects();
+      } else {
+        // Delete chat
+        await deleteChatAPI(deleteTarget.id);
+
+        // Calculate remaining chats before state update
+        const remainingChats = chats.filter(c => c.id !== deleteTarget.id);
+
+        // Remove from local state
+        setChats(prev => prev.filter(c => c.id !== deleteTarget.id));
+
+        // If deleting the current chat, select another chat or show empty state
+        if (selectedChatId === deleteTarget.id) {
+          if (remainingChats.length > 0) {
+            setSelectedChatId(remainingChats[0].id);
+          } else {
+            setSelectedChatId(null);
+            setNodes([]);
+          }
+        }
+
+        // Refresh chats list
+        if (selectedProjectId) {
+          await fetchProjectChats(selectedProjectId);
+        }
+      }
+
+      // Close modal
+      setDeleteModalOpen(false);
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Error deleting:', error);
+      alert(error.message || 'Failed to delete');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const navItems = useMemo(() => {
     if (view === 'projectDetail') {
-      return [
+      const items = [
         { id: 'back', label: 'Go back', onClick: showProjects, active: false },
-        { id: 'chat', label: 'Chat', onClick: () => setProjectPage('chat'), active: projectPage === 'chat' },
-        { id: 'history', label: 'View history', onClick: () => setProjectPage('history'), active: projectPage === 'history' },
+        { id: 'chats-title', label: 'Chats', kind: 'title' },
       ];
+
+      // Add "New Chat" button after the title
+      if (selectedProjectId && selectedProjectId !== 'new') {
+        items.push({
+          id: 'new-chat',
+          label: 'New Chat',
+          onClick: handleCreateNewChat,
+          active: false,
+          kind: 'create',
+        });
+      }
+
+      if (loadingChats) {
+        items.push({ id: 'chats-loading', label: 'Loading chats...', kind: 'disabled' });
+      } else if (chats.length === 0) {
+        items.push({ id: 'chats-empty', label: 'No chats available', kind: 'disabled' });
+      } else {
+        chats.forEach((chat) => {
+          items.push({
+            id: chat.id,
+            label: chat.title || 'Untitled Chat',
+            onClick: () => selectChat(chat.id),
+            active: selectedChatId === chat.id,
+            kind: 'chat',
+            onDelete: () => handleDeleteChat(chat.id),
+          });
+        });
+      }
+
+      items.push({
+        id: 'history',
+        label: 'View history',
+        onClick: () => setProjectPage('history'),
+        active: projectPage === 'history',
+      });
+
+      return items;
     }
 
     if (view === 'projects') {
       return [
         { id: 'home', label: 'Go back', onClick: goHome, active: false },
         { id: 'projects-title', label: 'Projects', kind: 'title' },
-        ...PROJECTS.map((project) => ({
+        ...projects.map((project) => ({
           id: project.id,
           label: project.name,
           onClick: () => goToProject(project.id),
           active: false,
           kind: 'project',
+          onDelete: () => handleDeleteProject(project.id),
         })),
         { id: 'create', label: 'Create a new project', onClick: createNewProject, kind: 'create' },
       ];
@@ -112,7 +519,7 @@ function App() {
       { id: 'home', label: 'Home', onClick: goHome, active: view === 'home' },
       { id: 'projects', label: 'Projects', onClick: showProjects, active: view === 'projects' },
     ];
-  }, [view, projectPage, goHome, showProjects]);
+  }, [view, projectPage, goHome, showProjects, chats, loadingChats, selectedChatId, selectedProjectId, projects, handleDeleteProject, handleDeleteChat]);
 
   const renderAuth = () => (
     <div className="auth-shell">
@@ -239,6 +646,7 @@ function App() {
   const renderProjectDetail = () => {
     const title =
       selectedProject?.name || (selectedProjectId === 'new' ? 'New Project' : 'Project');
+    const selectedChat = chats.find((c) => c.id === selectedChatId);
 
     return (
       <div className="section">
@@ -246,21 +654,68 @@ function App() {
         <h1>{title}</h1>
         <p className="muted">
           {projectPage === 'chat'
-            ? 'Chat workspace for collaboration and brainstorming.'
+            ? selectedChat
+              ? `Chat workspace: ${selectedChat.title}`
+              : 'Chat workspace for collaboration and brainstorming.'
             : 'Past activity, changes, and transcripts for this project.'}
         </p>
 
         {projectPage === 'chat' ? (
-          <div className="panel">
-            <div className="placeholder">Chat interface placeholder</div>
+          <div className="panel chat-panel">
+            {selectedProjectId === 'new' ? (
+              <div className="placeholder">
+                Create a project to start chatting.
+              </div>
+            ) : selectedChat ? (
+              <ChatInterface
+                chatId={selectedChat.id}
+                nodes={nodes}
+                onSendMessage={handleSendMessage}
+                isLoading={isSendingMessage}
+              />
+            ) : loadingChats ? (
+              <div className="placeholder">Loading chats...</div>
+            ) : chats.length === 0 ? (
+              <div className="placeholder">
+                <p>No chats yet. Create a new chat to get started!</p>
+                <button
+                  className="button primary"
+                  onClick={handleCreateNewChat}
+                  disabled={isCreatingChat}
+                  style={{ marginTop: '16px' }}
+                >
+                  {isCreatingChat ? 'Creating...' : 'Create New Chat'}
+                </button>
+              </div>
+            ) : (
+              <div className="placeholder">Select a chat to start messaging</div>
+            )}
           </div>
         ) : (
           <div className="panel">
-            <ul className="history-list">
-              <li>2026-01-10 — Synced notes and generated summary.</li>
-              <li>2026-01-05 — Uploaded research PDFs.</li>
-              <li>2025-12-28 — Created project draft.</li>
-            </ul>
+            {loadingNodes ? (
+              <div className="placeholder">Loading history...</div>
+            ) : nodes.length > 0 ? (
+              <ul className="history-list">
+                {nodes.map((node) => {
+                  const date = new Date(node.timestamp);
+                  const dateStr = date.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                  });
+                  const contentPreview =
+                    node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
+                  return (
+                    <li key={node.id}>
+                      {dateStr} — [{node.type}] {contentPreview}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="placeholder">No history available for this chat.</div>
+            )}
           </div>
         )}
       </div>
@@ -292,6 +747,40 @@ function App() {
               );
             }
 
+            if (item.kind === 'disabled') {
+              return (
+                <div key={item.id} className={classes.join(' ')}>
+                  {item.label}
+                </div>
+              );
+            }
+
+            // Check if item has delete handler (project or chat)
+            if (item.onDelete) {
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={classes.join(' ')}
+                  onClick={item.onClick}
+                >
+                  <span>{item.label}</span>
+                  <button
+                    type="button"
+                    className="nav-item-delete"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      item.onDelete();
+                    }}
+                    aria-label={`Delete ${item.label}`}
+                    title={`Delete ${item.label}`}
+                  >
+                    🗑️
+                  </button>
+                </button>
+              );
+            }
+
             return (
               <button
                 type="button"
@@ -310,7 +799,7 @@ function App() {
       </aside>
 
       <main className="main">
-        {view === 'projectDetail' && currentProjectTitle && (
+        {view === 'projectDetail' && currentProjectTitle && !selectedChatId && (
           <div className="page-banner">
             <p className="eyebrow">Active project</p>
             <h2>{currentProjectTitle}</h2>
@@ -320,6 +809,28 @@ function App() {
         {view === 'projects' && renderProjects()}
         {view === 'projectDetail' && renderProjectDetail()}
       </main>
+
+      <CreateProjectModal
+        isOpen={showCreateProjectModal}
+        onClose={() => {
+          setShowCreateProjectModal(false);
+          setCreateProjectError('');
+        }}
+        onCreateProject={handleCreateProject}
+        isLoading={isCreatingProject}
+        error={createProjectError}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setDeleteTarget(null);
+        }}
+        onConfirm={confirmDelete}
+        target={deleteTarget}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
