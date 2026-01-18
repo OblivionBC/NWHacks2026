@@ -16,6 +16,7 @@
 
 const { client } = require('./db');
 const { ObjectId } = require('mongodb');
+const { generateGeminiResponse } = require('./gemini-service');
 
 // Hardcoded userId for now (as mentioned in requirements)
 const HARDCODED_USER_ID = 'demo';
@@ -475,6 +476,58 @@ async function updateNode(req, res) {
   }
 }
 
+// POST /api/messages/ai - Generate AI response using Gemini
+async function generateAIMessage(req, res) {
+  try {
+    console.log("Generating AI response with Gemini");
+    const { chatId, userMessage } = req.body;
+
+    if (!chatId) {
+      return res.status(400).json({ error: 'chatId is required' });
+    }
+
+    if (!userMessage) {
+      return res.status(400).json({ error: 'userMessage is required' });
+    }
+
+    if (!ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chatId' });
+    }
+
+    const db = await getDb();
+
+    // Verify chat exists
+    const chat = await db.collection('chats').findOne({ _id: new ObjectId(chatId) });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    // Get conversation history from the database (exclude the current user message)
+    const nodes = await db.collection('nodes')
+      .find({ chatId: chatId })
+      .sort({ timestamp: 1 })
+      .toArray();
+
+    // Build conversation history for Gemini (only past messages, not the current one)
+    const conversationHistory = nodes.map(node => ({
+      role: node.type === 'USER' ? 'user' : 'model',
+      content: node.content
+    }));
+
+    console.log('Conversation history length:', conversationHistory.length);
+    console.log('User message:', userMessage);
+
+    // Generate AI response using Gemini
+    const aiResponse = await generateGeminiResponse(userMessage, conversationHistory);
+
+    console.log('Generated AI response:', aiResponse);
+    res.json({ response: aiResponse });
+  } catch (error) {
+    console.error('Error generating AI message:', error);
+    res.status(500).json({ error: 'Failed to generate AI response', message: error.message });
+  }
+}
+
 module.exports = {
   getAllProjects,
   createProject,
@@ -484,5 +537,6 @@ module.exports = {
   deleteChat,
   getChatNodes,
   createNode,
-  updateNode
+  updateNode,
+  generateAIMessage
 };
