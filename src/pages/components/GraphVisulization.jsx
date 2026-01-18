@@ -17,6 +17,26 @@ export default function TreeGraph(props) {
 
     const viewport = svg.append("g").attr("class", "zoom-viewport");
 
+    // Add tooltip element
+    const tooltip = d3.select("body").selectAll(".graph-tooltip").data([null]);
+    const tooltipEnter = tooltip.enter().append("div")
+      .attr("class", "graph-tooltip")
+      .style("position", "absolute")
+      .style("visibility", "hidden")
+      .style("background-color", "rgba(0, 0, 0, 0.9)")
+      .style("color", "white")
+      .style("padding", "8px 12px")
+      .style("border-radius", "6px")
+      .style("font-size", "12px")
+      .style("max-width", "300px")
+      .style("word-wrap", "break-word")
+      .style("pointer-events", "none")
+      .style("z-index", "1000")
+      .style("border", "1px solid rgba(111, 242, 214, 0.5)")
+      .style("box-shadow", "0 4px 12px rgba(0, 0, 0, 0.5)");
+    
+    const tooltipDiv = tooltipEnter.merge(tooltip);
+
     const zoomBehavior = d3.zoom()
         .scaleExtent([0.5, 5])
         .on("zoom", (event) => {
@@ -33,10 +53,12 @@ export default function TreeGraph(props) {
 
     const root = stratify(data.nodes);
 
-    const treeLayout = d3.tree().size([
-        width - margin.left - margin.right, 
-        height - margin.top - margin.bottom
-    ]);
+    const treeLayout = d3.tree()
+        .size([
+            width - margin.left - margin.right, 
+            height - margin.top - margin.bottom
+        ])
+        .nodeSize([80, 100]); // Horizontal and vertical spacing between nodes
     
     treeLayout(root);
 
@@ -61,32 +83,47 @@ export default function TreeGraph(props) {
         .data(root.descendants())
         .join("g")
         .attr("transform", d => `translate(${d.x},${d.y})`)
-        .style("cursor", (d) => {
-        // 'd.data' is your original node object
-        // Example: only show pointer for "AI" type nodes
-        return d.data.type === "AI" ? "pointer" : "default";
+        .style("cursor", "pointer")
+        .on("mouseover", function(event, d) {
+            tooltipDiv
+              .style("visibility", "visible")
+              .html(`<strong>${d.data.type}:</strong><br/>${d.data.content}`);
+        })
+        .on("mousemove", function(event) {
+            tooltipDiv
+              .style("top", (event.pageY - 10) + "px")
+              .style("left", (event.pageX + 10) + "px");
+        })
+        .on("mouseout", function() {
+            tooltipDiv.style("visibility", "hidden");
         })
         .on("click", function(event, d) {
-            if(d.data.type === "AI"){
-                // Remove previous selection highlights
-                chartContainer.selectAll("circle").attr("stroke", "none").attr("stroke-width", 0);
-                // Highlight clicked node
-                d3.select(this).select("circle").attr("stroke", "#ff6b6b").attr("stroke-width", 2);
-                console.log("Clicked node:", d.data);
-                // Emit the node click event
-                if(onNodeClick) {
-                    onNodeClick(d.data.id);
-                }
+            // Remove previous selection highlights
+            chartContainer.selectAll("circle").attr("stroke", "none").attr("stroke-width", 0);
+            // Highlight clicked node
+            d3.select(this).select("circle").attr("stroke", "#ff6b6b").attr("stroke-width", 2);
+            console.log("Clicked node:", d.data);
+            // Emit the node click event
+            if(onNodeClick) {
+                onNodeClick(d.data.id);
             }
         });
 
     nodeSelection.append("circle")
-        .attr("fill", d => d.id === currentNodeId ? "#555" : "#999")
-        .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "#FFFF00")
-        .attr("stroke-width", d => 
-            d.data.id === currentNodeId || d.data.isFlagged ? 1 : 0                             
-        )
-        .attr("r", d => d.data.isFlagged ? 12 : 6)
+        .attr("fill", d => {
+        if (d.data.id === currentNodeId) {
+            return "#555"; // Dark Gray for the Active Node
+        }
+        if (d.data.isFlagged) {
+            return "#000000"; // Orange/Gold for Flagged Nodes
+        }
+        return "#999"; // Light Gray for Regular Nodes
+    })
+    .attr("stroke", d =>  d.data.isFlagged  ? "#ffA500" : "lightblue")
+    .attr("stroke-width", d => 
+        d.data.id === currentNodeId || d.data.isFlagged ? 1 : 0                             
+    )
+    .attr("r", d => d.data.isFlagged ? 12 : 6)
 
      nodeSelection.append("text")
         .attr("dy", "0.35em") // Vertical center
@@ -98,20 +135,44 @@ export default function TreeGraph(props) {
         .text(d => d.data.isFlagged ? '🏳️': '');
 
     // --- FIX 2: CORRECT TEXT ACCESSOR ---
-    nodeSelection.append("text")
-        .attr("dy", "0.31em")
-        .attr("y", d => d.children ? -15 : 15) 
+    // Add labels below nodes with background
+    const labelGroup = nodeSelection.append("g")
+        .attr("class", "node-label")
+        .attr("transform", d => d.children ? "translate(0, -28)" : "translate(0, 22)");
+
+    // Add background rectangle for label
+    labelGroup.each(function(d) {
+        const text = d.data.content || "";
+        const truncatedText = text.length > 20 ? text.substring(0, 20) + "..." : text;
+        const paddingH = 4; // Horizontal padding
+        const paddingV = 3; // Vertical padding
+        const charWidth = 5.5;
+        const width = Math.max(truncatedText.length * charWidth + paddingH * 2, 30);
+        const height = 16;
+        
+        d3.select(this).append("rect")
+            .attr("x", -width / 2)
+            .attr("y", -height / 2)
+            .attr("width", width)
+            .attr("height", height)
+            .attr("rx", 3)
+            .attr("ry", 3)
+            .attr("fill", d.data.type === 'USER' ? 'rgba(48, 131, 220, 0.9)' : 'rgba(111, 242, 214, 0.9)')
+            .attr("stroke", d.data.type === 'USER' ? 'rgba(95, 164, 238, 0.8)' : 'rgba(111, 242, 214, 1)')
+            .attr("stroke-width", 1.5);
+    });
+
+    // Add label text
+    labelGroup.append("text")
+        .attr("dy", "0.35em")
         .attr("text-anchor", "middle")
-        .text(d => d.data.content) // d.data is the original node object
-        .attr("fill", d => d.id === currentNodeId ? "yellow" : "white")
+        .attr("fill", "rgba(0, 0, 0, 0.9)")
         .style("font-size", "10px")
-        // Optional: Simple text truncation for long content
-        .each(function(d) {
-            const self = d3.select(this);
+        .style("font-weight", "600")
+        .style("pointer-events", "none")
+        .text(d => {
             const text = d.data.content || "";
-            if (text.length > 20) {
-                self.text(text.substring(0, 20) + "...");
-            }
+            return text.length > 20 ? text.substring(0, 20) + "..." : text;
         });
 
 }, [margin, width, height]);
