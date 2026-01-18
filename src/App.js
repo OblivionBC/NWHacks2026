@@ -133,6 +133,36 @@ function App() {
           </div>
         ))}
       </div>
+
+      <div className="branch-anim" aria-hidden="true">
+        <svg viewBox="0 0 1200 320" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="branchGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#7c6bff" />
+              <stop offset="45%" stopColor="#6ff2d6" />
+              <stop offset="80%" stopColor="#ffb347" />
+            </linearGradient>
+          </defs>
+          <path className="branch-path trunk" d="M0 320 C 40 300, 85 260, 140 240" />
+          <path
+            className="branch-path main"
+            d="M140 240 C 220 210, 320 185, 430 190 C 560 195, 700 200, 840 195 C 980 190, 1100 205, 1200 195"
+          />
+          <path className="branch-path twig1" d="M260 202 C 300 165, 350 140, 400 142" />
+          <path className="branch-path twig2" d="M360 192 C 420 240, 470 255, 520 240" />
+          <path className="branch-path twig3" d="M520 192 C 570 155, 630 138, 690 145" />
+          <path className="branch-path twig4" d="M660 197 C 720 238, 790 255, 850 242" />
+          <path className="branch-path twig5" d="M820 195 C 880 160, 940 145, 1000 150" />
+          <path className="branch-path twig6" d="M930 198 C 990 232, 1060 244, 1120 232" />
+
+          <path className="branch-path sprig1" d="M400 142 C 420 124, 440 116, 462 120" />
+          <path className="branch-path sprig2" d="M520 240 C 545 262, 565 272, 590 265" />
+          <path className="branch-path sprig3" d="M690 145 C 712 126, 734 116, 760 122" />
+          <path className="branch-path sprig4" d="M850 242 C 870 264, 895 274, 918 268" />
+          <path className="branch-path sprig5" d="M1000 150 C 1022 132, 1042 125, 1064 130" />
+          <path className="branch-path sprig6" d="M1120 232 C 1144 252, 1168 260, 1190 255" />
+        </svg>
+      </div>
     </div>
   );
 
