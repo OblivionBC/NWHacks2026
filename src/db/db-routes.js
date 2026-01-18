@@ -1,3 +1,19 @@
+/**
+ * Database Routes
+ * 
+ * This file contains all API route handlers for the MongoDB database.
+ * All routes follow the schemas defined in ./schemas.js
+ * 
+ * Collections:
+ * - projects: Project workspaces
+ * - chats: Chat sessions belonging to projects
+ * - nodes: Message nodes belonging to chats
+ * 
+ * Cascade Deletion:
+ * - Deleting a project deletes all its chats and their nodes
+ * - Deleting a chat deletes all its nodes
+ */
+
 const { client } = require('./db');
 const { ObjectId } = require('mongodb');
 
@@ -72,6 +88,76 @@ async function createProject(req, res) {
   }
 }
 
+// DELETE /api/projects/:id - Delete a project and all its chats and nodes (cascade)
+async function deleteProject(req, res) {
+  try {
+    const projectId = req.params.id;
+    console.log("Deleting project with cascade:", projectId);
+    
+    if (!ObjectId.isValid(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+    
+    const db = await getDb();
+    
+    // Verify project exists
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Find all chats for this project (handle both string and ObjectId projectId)
+    const projectObjectId = new ObjectId(projectId);
+    const chats = await db.collection('chats')
+      .find({
+        $or: [
+          { projectId: projectId },
+          { projectId: projectObjectId }
+        ]
+      })
+      .toArray();
+    
+    console.log(`Found ${chats.length} chats for project ${projectId}`);
+    
+    let totalNodesDeleted = 0;
+    
+    // Delete all nodes for each chat (cascade)
+    for (const chat of chats) {
+      const chatId = chat._id.toString();
+      const nodesDeleteResult = await db.collection('nodes').deleteMany({ chatId: chatId });
+      totalNodesDeleted += nodesDeleteResult.deletedCount;
+      console.log(`Deleted ${nodesDeleteResult.deletedCount} nodes for chat ${chatId}`);
+    }
+    
+    // Delete all chats for this project
+    const chatsDeleteResult = await db.collection('chats').deleteMany({
+      $or: [
+        { projectId: projectId },
+        { projectId: projectObjectId }
+      ]
+    });
+    console.log(`Deleted ${chatsDeleteResult.deletedCount} chats for project ${projectId}`);
+    
+    // Delete the project
+    const projectDeleteResult = await db.collection('projects').deleteOne({ _id: new ObjectId(projectId) });
+    
+    if (projectDeleteResult.deletedCount === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    console.log(`Successfully deleted project ${projectId}, ${chatsDeleteResult.deletedCount} chats, and ${totalNodesDeleted} nodes`);
+    res.json({ 
+      message: 'Project and all associated chats and nodes deleted successfully',
+      deletedProjectId: projectId,
+      deletedChatsCount: chatsDeleteResult.deletedCount,
+      deletedNodesCount: totalNodesDeleted
+    });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ error: 'Failed to delete project', message: error.message });
+  }
+}
+
 // ==================== CHATS ====================
 
 // GET /api/projects/:id/chats - Get all chat sessions belonging to a project
@@ -85,15 +171,24 @@ async function getProjectChats(req, res) {
     }
     
     const db = await getDb();
+    
+    // Query for chats where projectId matches either as string or ObjectId
+    // This handles both cases since the schema allows both types
+    const projectObjectId = new ObjectId(projectId);
     const chats = await db.collection('chats')
-      .find({ projectId: projectId })
+      .find({
+        $or: [
+          { projectId: projectId },           // Match as string
+          { projectId: projectObjectId }       // Match as ObjectId
+        ]
+      })
       .sort({ lastUpdated: -1 }) // Sort by most recent first
       .toArray();
     
     // Transform to match schema
     const formattedChats = chats.map(chat => ({
       id: chat._id.toString(),
-      projectId: chat.projectId,
+      projectId: typeof chat.projectId === 'object' ? chat.projectId.toString() : chat.projectId,
       title: chat.title || '',
       lastUpdated: chat.lastUpdated || new Date().toISOString()
     }));
@@ -151,6 +246,47 @@ async function createChat(req, res) {
   }
 }
 
+// DELETE /api/chats/:id - Delete a chat and all its nodes (cascade)
+async function deleteChat(req, res) {
+  try {
+    const chatId = req.params.id;
+    console.log("Deleting chat with cascade:", chatId);
+    
+    if (!ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+    
+    const db = await getDb();
+    
+    // Verify chat exists
+    const chat = await db.collection('chats').findOne({ _id: new ObjectId(chatId) });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    // Delete all nodes for this chat (cascade)
+    const nodesDeleteResult = await db.collection('nodes').deleteMany({ chatId: chatId });
+    console.log(`Deleted ${nodesDeleteResult.deletedCount} nodes for chat ${chatId}`);
+    
+    // Delete the chat
+    const chatDeleteResult = await db.collection('chats').deleteOne({ _id: new ObjectId(chatId) });
+    
+    if (chatDeleteResult.deletedCount === 0) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    console.log(`Successfully deleted chat ${chatId} and ${nodesDeleteResult.deletedCount} associated nodes`);
+    res.json({ 
+      message: 'Chat and all associated nodes deleted successfully',
+      deletedChatId: chatId,
+      deletedNodesCount: nodesDeleteResult.deletedCount
+    });
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    res.status(500).json({ error: 'Failed to delete chat', message: error.message });
+  }
+}
+
 // ==================== NODES ====================
 
 // GET /api/chats/:id/nodes - Returns a sorted array of nodes for a chat (D3 format)
@@ -170,6 +306,8 @@ async function getChatNodes(req, res) {
       .find({ chatId: chatId })
       .sort({ timestamp: 1 }) // Chronological order
       .toArray();
+
+    console.log("Nodes:", nodes);
     
     // Transform to match schema
     const formattedNodes = nodes.map(node => ({
@@ -340,8 +478,10 @@ async function updateNode(req, res) {
 module.exports = {
   getAllProjects,
   createProject,
+  deleteProject,
   getProjectChats,
   createChat,
+  deleteChat,
   getChatNodes,
   createNode,
   updateNode

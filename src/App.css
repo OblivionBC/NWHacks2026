@@ -169,6 +169,15 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-item > span {
+  flex: 1;
+  text-align: left;
 }
 
 .nav-item.title {
@@ -190,10 +199,49 @@ body {
 }
 
 .nav-item.create {
-  background: linear-gradient(135deg, rgba(111, 242, 214, 0.18), rgba(48, 131, 220, 0.16));
-  border-color: rgba(111, 242, 214, 0.32);
-  font-weight: 700;
-  box-shadow: 0 10px 22px rgba(111, 242, 214, 0.16);
+  background: linear-gradient(135deg, rgba(111, 242, 214, 0.35), rgba(124, 107, 255, 0.28), rgba(48, 131, 220, 0.25));
+  border-color: rgba(111, 242, 214, 0.6);
+  border-width: 2px;
+  font-weight: 800;
+  font-size: 15px;
+  box-shadow: 0 8px 24px rgba(111, 242, 214, 0.35), 0 0 20px rgba(124, 107, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-item.create::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(111, 242, 214, 0.2), rgba(124, 107, 255, 0.15));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.nav-item.create:hover::before {
+  opacity: 1;
+}
+
+.nav-item.create {
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+.nav-item.create:hover {
+  border-color: rgba(111, 242, 214, 0.85);
+  background: linear-gradient(135deg, rgba(111, 242, 214, 0.45), rgba(124, 107, 255, 0.35), rgba(48, 131, 220, 0.3));
+  box-shadow: 0 12px 32px rgba(111, 242, 214, 0.45), 0 0 30px rgba(124, 107, 255, 0.3);
+  transform: translateY(-2px) scale(1.02);
+  animation: none;
+}
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(111, 242, 214, 0.35), 0 0 20px rgba(124, 107, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(111, 242, 214, 0.45), 0 0 25px rgba(124, 107, 255, 0.3);
+  }
 }
 
 .nav-item:hover {
@@ -205,14 +253,64 @@ body {
 .nav-item.active {
   border-color: var(--brilliant-azure);
   background: linear-gradient(135deg, rgba(48, 131, 220, 0.35), rgba(124, 107, 255, 0.22));
-  transform: translateX(4px);
+  transform: translateX(12px);
   box-shadow: 0 12px 28px rgba(48, 131, 220, 0.25);
+}
+
+.nav-item.chat.active {
+  border-color: var(--brilliant-azure);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.4), rgba(124, 107, 255, 0.28));
+  box-shadow: 0 12px 28px rgba(48, 131, 220, 0.3), 0 0 16px rgba(111, 242, 214, 0.2);
 }
 
 .nav-item.danger {
   background: linear-gradient(135deg, rgba(255, 122, 195, 0.14), rgba(0, 0, 0, 0.65));
   color: #ff8a8a;
   border-color: rgba(255, 138, 138, 0.35);
+}
+
+.nav-item-with-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.nav-item-with-actions > .nav-item {
+  flex: 1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-item-delete {
+  background: transparent;
+  border: none;
+  color: rgba(255, 138, 138, 0.7);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  border-radius: 6px;
+  opacity: 0.7;
+}
+
+.nav-item-delete:hover {
+  background: rgba(255, 138, 138, 0.15);
+  color: #ff8a8a;
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.nav-item-delete:active {
+  transform: scale(0.95);
 }
 
 .nav-footer {
@@ -615,8 +713,44 @@ h1 {
 
 .button.primary {
   background: linear-gradient(90deg, var(--ocean-deep), var(--brilliant-azure), var(--violet));
-  border-color: rgba(95, 164, 238, 0.6);
-  box-shadow: 0 12px 32px rgba(48, 131, 220, 0.28);
+  border-color: rgba(111, 242, 214, 0.7);
+  border-width: 2px;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 12px 32px rgba(48, 131, 220, 0.35), 0 0 24px rgba(111, 242, 214, 0.25);
+  position: relative;
+  overflow: hidden;
+  animation: subtle-pulse-button 3s ease-in-out infinite;
+}
+
+.button.primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(111, 242, 214, 0.2), rgba(124, 107, 255, 0.15));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.button.primary:hover::before {
+  opacity: 1;
+}
+
+.button.primary:hover {
+  border-color: rgba(111, 242, 214, 0.9);
+  box-shadow: 0 16px 40px rgba(48, 131, 220, 0.45), 0 0 32px rgba(111, 242, 214, 0.35);
+  transform: translateY(-2px) scale(1.03);
+  animation: none;
+}
+
+@keyframes subtle-pulse-button {
+  0%, 100% {
+    box-shadow: 0 12px 32px rgba(48, 131, 220, 0.35), 0 0 24px rgba(111, 242, 214, 0.25);
+  }
+  50% {
+    box-shadow: 0 12px 32px rgba(48, 131, 220, 0.45), 0 0 28px rgba(111, 242, 214, 0.35);
+  }
 }
 
 .button.ghost {
@@ -694,6 +828,11 @@ h1 {
   color: rgba(255, 255, 255, 0.82);
   display: grid;
   gap: 8px;
+}
+
+.chat-panel {
+  padding: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
