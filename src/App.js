@@ -861,9 +861,6 @@ function App() {
           </label>
           {authError && <p className="auth-error">{authError}</p>}
           <button type="submit" className="button primary full">Enter demo</button>
-          <button type="button" className="button ghost full" onClick={handleLogin}>
-            Skip (demo mode)
-          </button>
         </form>
       </div>
     </div>
@@ -1009,33 +1006,14 @@ function App() {
     } else {
       // History view
       return (
-        <div className="section">
-          <div className="panel">
-            {loadingNodes ? (
-              <div className="placeholder">Loading history...</div>
-            ) : nodes.length > 0 ? (
-              // <ul className="history-list">
-              //   {nodes.map((node) => {
-              //     const date = new Date(node.timestamp);
-              //     const dateStr = date.toLocaleDateString('en-US', {
-              //       year: 'numeric',
-              //       month: '2-digit',
-              //       day: '2-digit',
-              //     });
-              //     const contentPreview =
-              //       node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
-              //     return (
-              //       <li key={node.id}>
-              //         {dateStr} — [{node.type}] {contentPreview}
-              //       </li>
-              //     );
-              //   })}
-              // </ul>
-              <VersionControlTimeline chatId={selectedChatId} onNodeClick={handleRewindToMessage} currentNodeId={currentLeafNodeId}/>
-            ) : (
-              <div className="placeholder">No history available for this chat.</div>
-            )}
-          </div>
+        <div className="history-view">
+          {loadingNodes ? (
+            <div className="history-loading">Loading history...</div>
+          ) : nodes.length > 0 ? (
+            <VersionControlTimeline chatId={selectedChatId} onNodeClick={handleRewindToMessage} currentNodeId={currentLeafNodeId}/>
+          ) : (
+            <div className="history-empty">No history available for this chat.</div>
+          )}
         </div>
       );
     }
@@ -1166,7 +1144,7 @@ function App() {
         </div>
       </aside>
 
-      <main className={`main ${view === 'projectDetail' && projectPage === 'chat' && selectedChatId ? 'chat-view' : ''}`}>
+      <main className={`main ${view === 'projectDetail' && (projectPage === 'history' || (projectPage === 'chat' && selectedChatId)) ? 'chat-view' : ''}`}>
         {view === 'home' && renderHome()}
         {view === 'projects' && renderProjects()}
         {view === 'projectDetail' && renderProjectDetail()}

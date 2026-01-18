@@ -29,25 +29,27 @@ export default function VersionControlTimeline(props){
     }, [chatId]);
 
     return(
-    <>
-        <div className="version-control-header">
-            <h1>Version Control graph</h1>
-            <label className="toggle-switch">
-                <input 
-                    type="checkbox" 
-                    checked={collapseFlags}
-                    onChange={(e) => setCollapseFlags(e.target.checked)}
+        <div className="version-control-container">
+            <div className="version-control-header">
+                <h1>Version Control Graph</h1>
+                <label className="toggle-switch">
+                    <input 
+                        type="checkbox" 
+                        checked={collapseFlags}
+                        onChange={(e) => setCollapseFlags(e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                    <span className="toggle-label">Collapse Flags</span>
+                </label>
+            </div>
+            <div className="version-control-graph">
+                <GraphVisualization 
+                    data={treeData} 
+                    onNodeClick={onNodeClick} 
+                    currentNodeId={currentNodeId}
+                    collapseFlags={collapseFlags}
                 />
-                <span className="toggle-slider"></span>
-                <span className="toggle-label">Collapse Flags</span>
-            </label>
+            </div>
         </div>
-        <GraphVisualization 
-            data={treeData} 
-            onNodeClick={onNodeClick} 
-            currentNodeId={currentNodeId}
-            collapseFlags={collapseFlags}
-        />
-    </>
     )
 }
