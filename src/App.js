@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import branchLogo from './branch.svg';
 import './App.css';
+import ChatInterface from './ChatInterface';
+import TreeVisualization from './TreeVisualization';
+import { api } from './api';
 
-const PROJECTS = [
-  { id: 'proj-1', name: 'nwHacks2026 Brainstorming' },
-  { id: 'proj-2', name: 'school project brainstorming' },
-  { id: 'proj-3', name: 'exam preparation' },
-];
+// Projects will be loaded from API
+// const PROJECTS = [];
 
 const HOME_FEATURES = [
   {
@@ -27,10 +27,30 @@ function App() {
   const [view, setView] = useState('home'); // 'home' | 'projects' | 'projectDetail'
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [projectPage, setProjectPage] = useState('chat'); // 'chat' | 'history'
+  const [projects, setProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState(null);
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    setIsLoadingProjects(true);
+    try {
+      const loadedProjects = await api.getAllProjects();
+      setProjects(loadedProjects);
+    } catch (err) {
+      console.error('Failed to load projects:', err);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
 
   const selectedProject = useMemo(
-    () => PROJECTS.find((p) => p.id === selectedProjectId) || null,
-    [selectedProjectId]
+    () => projects.find((p) => p.id === selectedProjectId) || null,
+    [selectedProjectId, projects]
   );
 
   const currentProjectTitle = useMemo(() => {
@@ -56,10 +76,19 @@ function App() {
     setProjectPage('chat');
   };
 
-  const createNewProject = () => {
-    setSelectedProjectId('new');
-    setView('projectDetail');
-    setProjectPage('chat');
+  const createNewProject = async () => {
+    try {
+      console.log('Creating new project...');
+      const newProject = await api.createProject('New Project', 'A fresh idea workspace');
+      console.log('Project created:', newProject);
+      setProjects([...projects, newProject]);
+      setSelectedProjectId(newProject.id);
+      setView('projectDetail');
+      setProjectPage('chat');
+    } catch (err) {
+      console.error('Failed to create project:', err);
+      alert('Failed to create project. Make sure the backend server is running on port 3001 and MongoDB is running.');
+    }
   };
 
   const navItems = useMemo(() => {
@@ -75,7 +104,7 @@ function App() {
       return [
         { id: 'home', label: 'Go back', onClick: goHome, active: false },
         { id: 'projects-title', label: 'Projects', kind: 'title' },
-        ...PROJECTS.map((project) => ({
+        ...projects.map((project) => ({
           id: project.id,
           label: project.name,
           onClick: () => goToProject(project.id),
@@ -90,7 +119,7 @@ function App() {
       { id: 'home', label: 'Home', onClick: goHome, active: view === 'home' },
       { id: 'projects', label: 'Projects', onClick: showProjects, active: view === 'projects' },
     ];
-  }, [view, projectPage]);
+  }, [view, projectPage, projects]);
 
   const renderHome = () => (
     <div className="home">
@@ -172,14 +201,38 @@ function App() {
       <h1>Projects</h1>
       <p className="muted">Select a project from the left navigation to open it or start a new one.</p>
       <div className="panel">
-        <div className="placeholder">Use the navigation to pick a project.</div>
+        {isLoadingProjects ? (
+          <div className="placeholder">Loading projects...</div>
+        ) : projects.length === 0 ? (
+          <div className="placeholder">
+            <p>No projects yet. Click "Create a new project" to get started!</p>
+          </div>
+        ) : (
+          <div className="projects-grid">
+            {projects.map(project => (
+              <div key={project.id} className="project-card" onClick={() => goToProject(project.id)}>
+                <h3>{project.name}</h3>
+                <p className="muted">{project.description || 'No description'}</p>
+                <p className="project-date">Created {new Date(project.createdAt).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 
   const renderProjectDetail = () => {
-    const title =
-      selectedProject?.name || (selectedProjectId === 'new' ? 'New Project' : 'Project');
+    const title = selectedProject?.name || 'New Project';
+
+    if (!selectedProjectId || selectedProjectId === 'new') {
+      return (
+        <div className="section">
+          <p className="eyebrow">Project</p>
+          <h1>Creating Project...</h1>
+        </div>
+      );
+    }
 
     return (
       <div className="section">
@@ -188,20 +241,23 @@ function App() {
         <p className="muted">
           {projectPage === 'chat'
             ? 'Chat workspace for collaboration and brainstorming.'
-            : 'Past activity, changes, and transcripts for this project.'}
+            : 'Visualize your conversation tree and navigate between branches.'}
         </p>
 
         {projectPage === 'chat' ? (
-          <div className="panel">
-            <div className="placeholder">Chat interface placeholder</div>
-          </div>
+          <ChatInterface
+            projectId={selectedProjectId}
+            projectName={title}
+            onChatIdChange={setCurrentChatId}
+          />
         ) : (
-          <div className="panel">
-            <ul className="history-list">
-              <li>2026-01-10 — Synced notes and generated summary.</li>
-              <li>2026-01-05 — Uploaded research PDFs.</li>
-              <li>2025-12-28 — Created project draft.</li>
-            </ul>
+          <div className="panel tree-panel">
+            <TreeVisualization
+              chatId={currentChatId}
+              onNodeClick={(nodeId) => {
+                console.log('Node clicked:', nodeId);
+              }}
+            />
           </div>
         )}
       </div>

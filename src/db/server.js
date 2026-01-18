@@ -12,7 +12,8 @@ const {
   createChat,
   getChatNodes,
   createNode,
-  updateNode
+  updateNode,
+  getChatCompletion
 } = require('./db-routes');
 
 const app = express();
@@ -45,6 +46,10 @@ app.post('/api/nodes', createNode);
 
 // PATCH /api/nodes/:id - Toggle flags or update content
 app.patch('/api/nodes/:id', updateNode);
+
+// ==================== AI CHAT ROUTES ====================
+// POST /api/chat/completion - Send message and get AI response
+app.post('/api/chat/completion', getChatCompletion);
 
 // Start server
 app.listen(PORT, () => {

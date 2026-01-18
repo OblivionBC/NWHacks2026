@@ -1,8 +1,14 @@
 const { client } = require('./db');
 const { ObjectId } = require('mongodb');
+const OpenAI = require('openai');
 
 // Hardcoded userId for now (as mentioned in requirements)
 const HARDCODED_USER_ID = 'demo';
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 // Helper function to get database
 async function getDb() {
@@ -337,6 +343,150 @@ async function updateNode(req, res) {
   }
 }
 
+// ==================== AI CHAT ====================
+
+// Helper function to build conversation history from a node upwards through the tree
+async function buildConversationHistory(db, nodeId) {
+  const history = [];
+  let currentId = nodeId;
+
+  while (currentId) {
+    const node = await db.collection('nodes').findOne({ _id: new ObjectId(currentId) });
+    if (!node) break;
+
+    history.unshift({
+      role: node.type === 'USER' ? 'user' : 'assistant',
+      content: node.content
+    });
+
+    currentId = node.parentId;
+  }
+
+  return history;
+}
+
+// POST /api/chat/completion - Get AI response for a message
+async function getChatCompletion(req, res) {
+  try {
+    console.log("Getting AI chat completion");
+    const { chatId, parentId, userMessage } = req.body;
+
+    if (!chatId) {
+      return res.status(400).json({ error: 'chatId is required' });
+    }
+
+    if (!ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chatId' });
+    }
+
+    if (!userMessage) {
+      return res.status(400).json({ error: 'userMessage is required' });
+    }
+
+    const db = await getDb();
+
+    // Verify chat exists
+    const chat = await db.collection('chats').findOne({ _id: new ObjectId(chatId) });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    // Build conversation history from parent node upwards
+    let conversationHistory = [];
+    if (parentId && ObjectId.isValid(parentId)) {
+      conversationHistory = await buildConversationHistory(db, parentId);
+    }
+
+    // Add the new user message to history
+    conversationHistory.push({
+      role: 'user',
+      content: userMessage
+    });
+
+    // Create user node first
+    const userNode = {
+      chatId: chatId,
+      parentId: parentId || null,
+      type: 'USER',
+      content: userMessage,
+      isFlagged: false,
+      timestamp: new Date().toISOString(),
+      metadata: {}
+    };
+
+    const userNodeResult = await db.collection('nodes').insertOne(userNode);
+    const userNodeId = userNodeResult.insertedId.toString();
+
+    // Get AI response
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful AI assistant designed to help users brainstorm and develop ideas. Be creative, thoughtful, and encourage exploration of different possibilities.'
+        },
+        ...conversationHistory
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    // Create AI response node
+    const aiNode = {
+      chatId: chatId,
+      parentId: userNodeId,
+      type: 'AI',
+      content: aiResponse,
+      isFlagged: false,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        model: 'gpt-4o-mini',
+        tokens: completion.usage
+      }
+    };
+
+    const aiNodeResult = await db.collection('nodes').insertOne(aiNode);
+
+    // Update chat lastUpdated timestamp
+    await db.collection('chats').updateOne(
+      { _id: new ObjectId(chatId) },
+      { $set: { lastUpdated: new Date().toISOString() } }
+    );
+
+    // Return both nodes
+    const response = {
+      userNode: {
+        id: userNodeId,
+        chatId: userNode.chatId,
+        parentId: userNode.parentId,
+        type: userNode.type,
+        content: userNode.content,
+        isFlagged: userNode.isFlagged,
+        timestamp: userNode.timestamp,
+        metadata: userNode.metadata
+      },
+      aiNode: {
+        id: aiNodeResult.insertedId.toString(),
+        chatId: aiNode.chatId,
+        parentId: aiNode.parentId,
+        type: aiNode.type,
+        content: aiNode.content,
+        isFlagged: aiNode.isFlagged,
+        timestamp: aiNode.timestamp,
+        metadata: aiNode.metadata
+      }
+    };
+
+    console.log('Created chat completion with nodes:', response);
+    res.status(201).json(response);
+  } catch (error) {
+    console.error('Error creating chat completion:', error);
+    res.status(500).json({ error: 'Failed to create chat completion', message: error.message });
+  }
+}
+
 module.exports = {
   getAllProjects,
   createProject,
@@ -344,5 +494,6 @@ module.exports = {
   createChat,
   getChatNodes,
   createNode,
-  updateNode
+  updateNode,
+  getChatCompletion
 };
