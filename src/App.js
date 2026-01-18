@@ -4,6 +4,7 @@ import './App.css';
 import CreateProjectModal from './components/CreateProjectModal';
 import DeleteConfirmationModal from './components/DeleteConfirmationModal';
 import ChatInterface from './components/ChatInterface';
+import VersionControlTimeline from './pages/VersionControlTimeline';
 
 const HOME_FEATURES = [
   {
@@ -36,7 +37,9 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [chats, setChats] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
-  const [nodes, setNodes] = useState([]);
+  const [nodes, setNodes] = useState([]); // Currently active path nodes (displayed in chat)
+  const [allNodes, setAllNodes] = useState([]); // All nodes for the graph
+  const [currentLeafNodeId, setCurrentLeafNodeId] = useState(null); // Track the current "end" of conversation
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingNodes, setLoadingNodes] = useState(false);
@@ -56,6 +59,11 @@ function App() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // State for editing project names
+  const [editingProjectId, setEditingProjectId] = useState(null);
+  const [editedProjectName, setEditedProjectName] = useState('');
+  const [isUpdatingProject, setIsUpdatingProject] = useState(false);
 
   // API Helper Functions
   const fetchProjects = useCallback(async () => {
@@ -104,15 +112,56 @@ function App() {
         throw new Error('Failed to fetch nodes');
       }
       const data = await response.json();
-      setNodes(data.nodes || []);
+      setAllNodes(data.nodes || []);
+      
+      // Build the active path (from root to the most recent leaf)
+      const activePath = buildActivePath(data.nodes || []);
+      setNodes(activePath);
+      
+      // Set the current leaf node
+      if (activePath.length > 0) {
+        setCurrentLeafNodeId(activePath[activePath.length - 1].id);
+      } else {
+        setCurrentLeafNodeId(null);
+      }
+      
       return data;
     } catch (error) {
       console.error('Error fetching nodes:', error);
       setNodes([]);
+      setAllNodes([]);
       return { nodes: [], links: [] };
     } finally {
       setLoadingNodes(false);
     }
+  };
+
+  // Build the active path from root to a specific leaf node
+  const buildActivePath = (allNodes, leafNodeId = null) => {
+    if (!allNodes || allNodes.length === 0) return [];
+    
+    // If no leaf specified, find the most recent leaf node
+    let targetLeafId = leafNodeId;
+    if (!targetLeafId) {
+      // Find the most recent node (by timestamp)
+      const sortedNodes = [...allNodes].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
+      targetLeafId = sortedNodes[0]?.id;
+    }
+    
+    // Build path from leaf back to root
+    const path = [];
+    let currentId = targetLeafId;
+    
+    while (currentId) {
+      const node = allNodes.find(n => n.id === currentId);
+      if (!node) break;
+      path.unshift(node); // Add to beginning of array
+      currentId = node.parentId;
+    }
+    
+    return path;
   };
 
   // Auto-load projects when authenticated and on home or projects page
@@ -129,6 +178,8 @@ function App() {
       fetchChatNodes(selectedChatId);
     } else {
       setNodes([]);
+      setAllNodes([]);
+      setCurrentLeafNodeId(null);
     }
   }, [selectedChatId]);
 
@@ -281,6 +332,36 @@ function App() {
     return response.json();
   };
 
+  const updateChatAPI = async (chatId, title) => {
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update chat');
+    }
+    return response.json();
+  };
+
+  const updateProjectAPI = async (projectId, name, description) => {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, description }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update project');
+    }
+    return response.json();
+  };
+
   // Generate AI Response using Gemini API
   const generateAIResponseAPI = async (chatId, userMessage) => {
     try {
@@ -356,15 +437,15 @@ function App() {
     }
     setIsSendingMessage(true);
     try {
-      // Get the last node ID for parentId (or null if first message)
-      const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
-      const parentId = lastNode ? lastNode.id : null;
+      // Use the current leaf node as parent (this is where we're branching from)
+      const parentId = currentLeafNodeId;
+      const isFirstMessage = !parentId;
 
-      // Create USER node
+      // Create USER node (backend will auto-name chat if this is first message)
       const userNode = await createNodeAPI(selectedChatId, 'USER', messageContent, parentId);
 
       // Immediately add the user node to the UI for instant feedback
-      setNodes(prev => [...prev, {
+      const newUserNode = {
         id: userNode.id,
         chatId: selectedChatId,
         parentId: parentId,
@@ -373,15 +454,31 @@ function App() {
         isFlagged: false,
         timestamp: new Date().toISOString(),
         metadata: {}
-      }]);
+      };
+      
+      setNodes(prev => [...prev, newUserNode]);
+      setAllNodes(prev => [...prev, newUserNode]);
+      setCurrentLeafNodeId(userNode.id);
+
+      // If this is the first message, refresh chats after a delay to get the auto-generated title
+      // The title generation happens asynchronously in the backend, so we poll for updates
+      if (isFirstMessage && selectedProjectId) {
+        // Refresh immediately (in case it's fast)
+        fetchProjectChats(selectedProjectId);
+        
+        // Also refresh after a delay to catch the async title update
+        setTimeout(() => {
+          fetchProjectChats(selectedProjectId);
+        }, 2000); // 2 second delay should be enough for Gemini to generate the title
+      }
 
       // Generate AI response using Gemini API
       const aiResponse = await generateAIResponseAPI(selectedChatId, messageContent);
 
       // Create AI node with the USER node as parent
-      await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
+      const aiNode = await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
 
-      // Refresh nodes to show new messages (including the AI response)
+      // Refresh nodes to get the complete state including the AI response
       await fetchChatNodes(selectedChatId);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -391,6 +488,64 @@ function App() {
     } finally {
       setIsSendingMessage(false);
     }
+  };
+
+  const handleUpdateChatTitle = async (newTitle) => {
+    if (!selectedChatId) {
+      return;
+    }
+    try {
+      const updatedChat = await updateChatAPI(selectedChatId, newTitle);
+      // Update local chats state
+      setChats(prev => prev.map(chat => 
+        chat.id === selectedChatId ? updatedChat : chat
+      ));
+    } catch (error) {
+      console.error('Error updating chat title:', error);
+      throw error;
+    }
+  };
+
+  const handleStartEditProject = (projectId, currentName) => {
+    setEditingProjectId(projectId);
+    setEditedProjectName(currentName);
+  };
+
+  const handleSaveProjectName = async (projectId) => {
+    if (!editedProjectName.trim()) {
+      const project = projects.find(p => p.id === projectId);
+      setEditedProjectName(project?.name || '');
+      setEditingProjectId(null);
+      return;
+    }
+
+    if (editedProjectName.trim() === projects.find(p => p.id === projectId)?.name) {
+      setEditingProjectId(null);
+      return;
+    }
+
+    setIsUpdatingProject(true);
+    try {
+      const project = projects.find(p => p.id === projectId);
+      const updatedProject = await updateProjectAPI(projectId, editedProjectName.trim(), project?.description);
+      // Update local projects state
+      setProjects(prev => prev.map(p => 
+        p.id === projectId ? updatedProject : p
+      ));
+      setEditingProjectId(null);
+    } catch (error) {
+      console.error('Error updating project name:', error);
+      alert(error.message || 'Failed to update project name');
+      const project = projects.find(p => p.id === projectId);
+      setEditedProjectName(project?.name || '');
+    } finally {
+      setIsUpdatingProject(false);
+    }
+  };
+
+  const handleCancelEditProject = () => {
+    setEditingProjectId(null);
+    setEditedProjectName('');
   };
 
   const handleToggleFlag = async (nodeId, currentFlagState) => {
@@ -407,6 +562,23 @@ function App() {
     } catch (error) {
       console.error('Error toggling flag:', error);
       alert(error.message || 'Failed to toggle flag');
+    }
+  };
+
+  const handleRewindToMessage = async (nodeId) => {
+    if (!selectedChatId) return;
+    
+    try {
+      // Build the active path up to and including the selected node
+      const newActivePath = buildActivePath(allNodes, nodeId);
+      
+      // Update local state
+      setNodes(newActivePath);
+      setCurrentLeafNodeId(nodeId);
+
+      console.log('Rewound to node:', nodeId);
+    } catch (error) {
+      console.error('Error rewinding to node:', error);
     }
   };
 
@@ -566,16 +738,21 @@ function App() {
       projects.forEach((project) => {
         const isExpanded = expandedProjectId === project.id;
         const isSelected = selectedProjectId === project.id;
+        const isEditing = editingProjectId === project.id;
         
         // Add project item
         items.push({
           id: project.id,
           label: project.name,
-          onClick: () => goToProject(project.id),
+          onClick: isEditing ? undefined : () => goToProject(project.id),
           active: isSelected,
           kind: 'project',
           expanded: isExpanded,
           onDelete: () => handleDeleteProject(project.id),
+          isEditing: isEditing,
+          onEdit: () => handleStartEditProject(project.id, project.name),
+          onSave: () => handleSaveProjectName(project.id),
+          onCancel: handleCancelEditProject,
         });
 
         // If this project is expanded, show its chats nested underneath
@@ -645,20 +822,25 @@ function App() {
     selectedProjectId, 
     expandedProjectId,
     projects, 
+    editingProjectId,
     handleDeleteProject, 
     handleDeleteChat,
     handleCreateNewChat,
     selectChat,
     goToProject,
-    createNewProject
+    createNewProject,
+    handleStartEditProject,
+    handleSaveProjectName,
+    handleCancelEditProject
   ]);
 
   const renderAuth = () => (
     <div className="auth-shell">
       <div className="auth-card">
         <div className="auth-logo">
-          <img src={branchLogo} alt="ThoughtTree logo" />
-          <span>ThoughtTree</span>
+          <span>Though</span>
+          <img className="auth-logo-inline" src="/LogoT.png" alt="T" />
+          <span>ree</span>
         </div>
         <p className="muted small">Please log in to continue.</p>
         <form className="auth-form" onSubmit={handleLogin}>
@@ -795,6 +977,7 @@ function App() {
             nodes={nodes}
             onSendMessage={handleSendMessage}
             onToggleFlag={handleToggleFlag}
+            onUpdateTitle={handleUpdateChatTitle}
             isLoading={isSendingMessage}
           />
         );
@@ -835,23 +1018,24 @@ function App() {
             {loadingNodes ? (
               <div className="placeholder">Loading history...</div>
             ) : nodes.length > 0 ? (
-              <ul className="history-list">
-                {nodes.map((node) => {
-                  const date = new Date(node.timestamp);
-                  const dateStr = date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                  });
-                  const contentPreview =
-                    node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
-                  return (
-                    <li key={node.id}>
-                      {dateStr} — [{node.type}] {contentPreview}
-                    </li>
-                  );
-                })}
-              </ul>
+              // <ul className="history-list">
+              //   {nodes.map((node) => {
+              //     const date = new Date(node.timestamp);
+              //     const dateStr = date.toLocaleDateString('en-US', {
+              //       year: 'numeric',
+              //       month: '2-digit',
+              //       day: '2-digit',
+              //     });
+              //     const contentPreview =
+              //       node.content.length > 100 ? node.content.substring(0, 100) + '...' : node.content;
+              //     return (
+              //       <li key={node.id}>
+              //         {dateStr} — [{node.type}] {contentPreview}
+              //       </li>
+              //     );
+              //   })}
+              // </ul>
+              <VersionControlTimeline chatId={selectedChatId} onNodeClick={handleRewindToMessage} currentNodeId={currentLeafNodeId}/>
             ) : (
               <div className="placeholder">No history available for this chat.</div>
             )}
@@ -869,8 +1053,9 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <img className="brand-logo" src={branchLogo} alt="ThoughtTree logo" />
-          <span>ThoughtTree</span>
+          <span>Though</span>
+          <img className="brand-logo-inline" src="/LogoT.png" alt="T" />
+          <span>ree</span>
         </div>
         <nav className="nav">
           {navItems.map((item) => {
@@ -898,12 +1083,60 @@ function App() {
 
             // Check if item has delete handler (project or chat)
             if (item.onDelete) {
+              // If editing, show input field
+              if (item.isEditing) {
+                return (
+                  <div key={item.id} className={classes.join(' ')} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px' }}>
+                    <input
+                      type="text"
+                      value={editedProjectName}
+                      onChange={(e) => setEditedProjectName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          item.onSave();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          item.onCancel();
+                        }
+                      }}
+                      onBlur={item.onSave}
+                      disabled={isUpdatingProject}
+                      className="nav-item-input"
+                      autoFocus
+                      style={{ flex: 1, padding: '4px 8px', fontSize: '14px' }}
+                    />
+                    <button
+                      type="button"
+                      className="nav-item-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        item.onCancel();
+                      }}
+                      aria-label="Cancel editing"
+                      title="Cancel editing"
+                      disabled={isUpdatingProject}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
+
+              // Regular project/chat item with delete button
               return (
                 <button
                   key={item.id}
                   type="button"
                   className={classes.join(' ')}
                   onClick={item.onClick}
+                  onContextMenu={(e) => {
+                    if (item.kind === 'project') {
+                      e.preventDefault();
+                      item.onEdit();
+                    }
+                  }}
+                  title={item.kind === 'project' ? 'Right-click to edit' : undefined}
                 >
                   <span>{item.label}</span>
                   <button

@@ -133,32 +133,27 @@ function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, 
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          nodes.map((node) => {
-            // Only show flag for AI messages that are not root messages
-            const canFlag = node.type === 'AI' && node.parentId !== null;
-            
-            return (
-              <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
-                <div className="message-header">
-                  <span className="message-type">{node.type}</span>
-                  {canFlag && (
-                    <button
-                      type="button"
-                      className={`message-flag ${node.isFlagged ? 'flagged' : ''}`}
-                      onClick={() => onToggleFlag(node.id, node.isFlagged)}
-                      aria-label={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
-                      title={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
-                    >
-                      🏳️
-                    </button>
-                  )}
-                </div>
-                <div className="message-content">
-                  <ReactMarkdown>{node.content}</ReactMarkdown>
-                </div>
+          nodes.map((node) => (
+            <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
+              <div className="message-header">
+                <span className="message-type">{node.type}</span>
+                {node.type === 'AI' && node.parentId !== null && (
+                  <button
+                    type="button"
+                    className={`message-flag ${node.isFlagged ? 'flagged' : ''}`}
+                    onClick={() => onToggleFlag(node.id, node.isFlagged)}
+                    aria-label={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                    title={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                  >
+                    🏳️
+                  </button>
+                )}
               </div>
-            );
-          })
+              <div className="message-content">
+                <ReactMarkdown>{node.content}</ReactMarkdown>
+              </div>
+            </div>
+          ))
         )}
         {isLoading && (
           <div className="message ai loading">
