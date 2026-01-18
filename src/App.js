@@ -37,7 +37,9 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [chats, setChats] = useState([]);
   const [selectedChatId, setSelectedChatId] = useState(null);
-  const [nodes, setNodes] = useState([]);
+  const [nodes, setNodes] = useState([]); // Currently active path nodes (displayed in chat)
+  const [allNodes, setAllNodes] = useState([]); // All nodes for the graph
+  const [currentLeafNodeId, setCurrentLeafNodeId] = useState(null); // Track the current "end" of conversation
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
   const [loadingNodes, setLoadingNodes] = useState(false);
@@ -110,15 +112,56 @@ function App() {
         throw new Error('Failed to fetch nodes');
       }
       const data = await response.json();
-      setNodes(data.nodes || []);
+      setAllNodes(data.nodes || []);
+      
+      // Build the active path (from root to the most recent leaf)
+      const activePath = buildActivePath(data.nodes || []);
+      setNodes(activePath);
+      
+      // Set the current leaf node
+      if (activePath.length > 0) {
+        setCurrentLeafNodeId(activePath[activePath.length - 1].id);
+      } else {
+        setCurrentLeafNodeId(null);
+      }
+      
       return data;
     } catch (error) {
       console.error('Error fetching nodes:', error);
       setNodes([]);
+      setAllNodes([]);
       return { nodes: [], links: [] };
     } finally {
       setLoadingNodes(false);
     }
+  };
+
+  // Build the active path from root to a specific leaf node
+  const buildActivePath = (allNodes, leafNodeId = null) => {
+    if (!allNodes || allNodes.length === 0) return [];
+    
+    // If no leaf specified, find the most recent leaf node
+    let targetLeafId = leafNodeId;
+    if (!targetLeafId) {
+      // Find the most recent node (by timestamp)
+      const sortedNodes = [...allNodes].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+      );
+      targetLeafId = sortedNodes[0]?.id;
+    }
+    
+    // Build path from leaf back to root
+    const path = [];
+    let currentId = targetLeafId;
+    
+    while (currentId) {
+      const node = allNodes.find(n => n.id === currentId);
+      if (!node) break;
+      path.unshift(node); // Add to beginning of array
+      currentId = node.parentId;
+    }
+    
+    return path;
   };
 
   // Auto-load projects when authenticated and on home or projects page
@@ -135,6 +178,8 @@ function App() {
       fetchChatNodes(selectedChatId);
     } else {
       setNodes([]);
+      setAllNodes([]);
+      setCurrentLeafNodeId(null);
     }
   }, [selectedChatId]);
 
@@ -392,16 +437,15 @@ function App() {
     }
     setIsSendingMessage(true);
     try {
-      // Get the last node ID for parentId (or null if first message)
-      const lastNode = nodes.length > 0 ? nodes[nodes.length - 1] : null;
-      const parentId = lastNode ? lastNode.id : null;
+      // Use the current leaf node as parent (this is where we're branching from)
+      const parentId = currentLeafNodeId;
       const isFirstMessage = !parentId;
 
       // Create USER node (backend will auto-name chat if this is first message)
       const userNode = await createNodeAPI(selectedChatId, 'USER', messageContent, parentId);
 
       // Immediately add the user node to the UI for instant feedback
-      setNodes(prev => [...prev, {
+      const newUserNode = {
         id: userNode.id,
         chatId: selectedChatId,
         parentId: parentId,
@@ -410,7 +454,11 @@ function App() {
         isFlagged: false,
         timestamp: new Date().toISOString(),
         metadata: {}
-      }]);
+      };
+      
+      setNodes(prev => [...prev, newUserNode]);
+      setAllNodes(prev => [...prev, newUserNode]);
+      setCurrentLeafNodeId(userNode.id);
 
       // If this is the first message, refresh chats after a delay to get the auto-generated title
       // The title generation happens asynchronously in the backend, so we poll for updates
@@ -428,9 +476,9 @@ function App() {
       const aiResponse = await generateAIResponseAPI(selectedChatId, messageContent);
 
       // Create AI node with the USER node as parent
-      await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
+      const aiNode = await createNodeAPI(selectedChatId, 'AI', aiResponse, userNode.id);
 
-      // Refresh nodes to show new messages (including the AI response)
+      // Refresh nodes to get the complete state including the AI response
       await fetchChatNodes(selectedChatId);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -514,6 +562,23 @@ function App() {
     } catch (error) {
       console.error('Error toggling flag:', error);
       alert(error.message || 'Failed to toggle flag');
+    }
+  };
+
+  const handleRewindToMessage = async (nodeId) => {
+    if (!selectedChatId) return;
+    
+    try {
+      // Build the active path up to and including the selected node
+      const newActivePath = buildActivePath(allNodes, nodeId);
+      
+      // Update local state
+      setNodes(newActivePath);
+      setCurrentLeafNodeId(nodeId);
+
+      console.log('Rewound to node:', nodeId);
+    } catch (error) {
+      console.error('Error rewinding to node:', error);
     }
   };
 
@@ -970,7 +1035,7 @@ function App() {
               //     );
               //   })}
               // </ul>
-              <VersionControlTimeline chatId={selectedChatId}/>
+              <VersionControlTimeline chatId={selectedChatId} onNodeClick={handleRewindToMessage} currentNodeId={currentLeafNodeId}/>
             ) : (
               <div className="placeholder">No history available for this chat.</div>
             )}
