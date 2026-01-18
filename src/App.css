@@ -557,14 +557,6 @@ body {
   overflow: hidden;
 }
 
-.home-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 20% 20%, rgba(111, 242, 214, 0.16), transparent 35%),
-    radial-gradient(circle at 80% 80%, rgba(124, 107, 255, 0.14), transparent 40%);
-  pointer-events: none;
-}
 
 .feature-title {
   margin: 0 0 6px;
