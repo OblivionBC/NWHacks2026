@@ -17,6 +17,12 @@ function App() {
     [selectedProjectId]
   );
 
+  const currentProjectTitle = useMemo(() => {
+    if (selectedProject) return selectedProject.name;
+    if (selectedProjectId === 'new') return 'New Project';
+    return null;
+  }, [selectedProject, selectedProjectId]);
+
   const showProjects = () => {
     setView('projects');
     setSelectedProjectId(null);
@@ -166,6 +172,12 @@ function App() {
       </aside>
 
       <main className="main">
+        {view === 'projectDetail' && currentProjectTitle && (
+          <div className="page-banner">
+            <p className="eyebrow">Active project</p>
+            <h2>{currentProjectTitle}</h2>
+          </div>
+        )}
         {view === 'home' && renderHome()}
         {view === 'projects' && renderProjects()}
         {view === 'projectDetail' && renderProjectDetail()}
