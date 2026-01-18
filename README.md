@@ -111,4 +111,14 @@ Nodes and links are returned from the API to feed D3 for visualization.
 
 - Frontend & design: UI, styling, React components, connecting the interface to the backend using JavaScript and CSS  
 - Backend: API endpoints for projects, chats, and nodes  
-- AI integration: Gemini API for generating conversation content  
+- AI integration: Gemini API for generating conversation content
+
+---
+
+## TEAM
+- Connor https://www.linkedin.com/in/connor-hengstler-097199252/
+- Stan https://www.linkedin.com/in/stanislav-rudenko-702544366/
+- Chris https://www.linkedin.com/in/chris-ch0ng/
+- Amarjot https://www.linkedin.com/in/amarjot-sangha/
+
+---
