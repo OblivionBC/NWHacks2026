@@ -30,6 +30,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('demo123');
   const [authError, setAuthError] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
+  const [expandedProjectId, setExpandedProjectId] = useState(null);
   const [projectPage, setProjectPage] = useState('chat'); // 'chat' | 'history'
   
   // State for projects, chats, and nodes
@@ -144,18 +145,37 @@ function App() {
   }, [selectedProject, selectedProjectId]);
 
   const showProjects = () => {
-    setView('projects');
+    setView('home');
     setSelectedProjectId(null);
+    setExpandedProjectId(null);
+    setSelectedChatId(null);
+    setNodes([]);
+    setChats([]);
   };
 
   const goHome = () => {
     setView('home');
     setSelectedProjectId(null);
+    setExpandedProjectId(null);
     setProjectPage('chat');
+    setSelectedChatId(null);
+    setNodes([]);
+    setChats([]);
   };
 
   const goToProject = async (projectId) => {
+    // Toggle expansion if clicking the same project
+    if (expandedProjectId === projectId) {
+      setExpandedProjectId(null);
+      setSelectedProjectId(null);
+      setSelectedChatId(null);
+      setNodes([]);
+      setChats([]);
+      return;
+    }
+    
     setSelectedProjectId(projectId);
+    setExpandedProjectId(projectId);
     setView('projectDetail');
     setProjectPage('chat');
     setSelectedChatId(null);
@@ -243,6 +263,21 @@ function App() {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to delete chat');
+    }
+    return response.json();
+  };
+
+  const toggleNodeFlagAPI = async (nodeId, isFlagged) => {
+    const response = await fetch(`${API_BASE_URL}/nodes/${nodeId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ isFlagged }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to toggle flag');
     }
     return response.json();
   };
@@ -359,6 +394,23 @@ function App() {
     }
   };
 
+  const handleToggleFlag = async (nodeId, currentFlagState) => {
+    try {
+      const newFlagState = !currentFlagState;
+      const updatedNode = await toggleNodeFlagAPI(nodeId, newFlagState);
+      
+      // Update local state to reflect the change
+      setNodes(prev => prev.map(node => 
+        node.id === nodeId 
+          ? { ...node, isFlagged: updatedNode.isFlagged }
+          : node
+      ));
+    } catch (error) {
+      console.error('Error toggling flag:', error);
+      alert(error.message || 'Failed to toggle flag');
+    }
+  };
+
   const handleLogin = (e) => {
     e?.preventDefault();
     if (!authEmail.trim() || !authPassword.trim()) {
@@ -445,10 +497,11 @@ function App() {
         // Remove from local state
         setProjects(prev => prev.filter(p => p.id !== deleteTarget.id));
 
-        // If deleting the current project, navigate to projects view
+        // If deleting the current project, clear selection
         if (selectedProjectId === deleteTarget.id) {
           setSelectedProjectId(null);
-          setView('projects');
+          setExpandedProjectId(null);
+          setView('home');
           setSelectedChatId(null);
           setNodes([]);
           setChats([]);
@@ -494,71 +547,112 @@ function App() {
   };
 
   const navItems = useMemo(() => {
-    if (view === 'projectDetail') {
-      const items = [
-        { id: 'back', label: 'Go back', onClick: showProjects, active: false },
-        { id: 'chats-title', label: 'Chats', kind: 'title' },
-      ];
+    const items = [
+      { id: 'home', label: 'Home', onClick: goHome, active: view === 'home' },
+      { id: 'projects-title', label: 'Projects', kind: 'title' },
+    ];
 
-      // Add "New Chat" button after the title
-      if (selectedProjectId && selectedProjectId !== 'new') {
-        items.push({
-          id: 'new-chat',
-          label: 'New Chat',
-          onClick: handleCreateNewChat,
-          active: false,
-          kind: 'create',
-        });
-      }
-
-      if (loadingChats) {
-        items.push({ id: 'chats-loading', label: 'Loading chats...', kind: 'disabled' });
-      } else if (chats.length === 0) {
-        items.push({ id: 'chats-empty', label: 'No chats available', kind: 'disabled' });
-      } else {
-        chats.forEach((chat) => {
-          items.push({
-            id: chat.id,
-            label: chat.title || 'Untitled Chat',
-            onClick: () => selectChat(chat.id),
-            active: selectedChatId === chat.id,
-            kind: 'chat',
-            onDelete: () => handleDeleteChat(chat.id),
-          });
-        });
-      }
-
-      items.push({
-        id: 'history',
-        label: 'View history',
-        onClick: () => setProjectPage('history'),
-        active: projectPage === 'history',
+    // Always show all projects in expanded dropdown
+    if (loadingProjects) {
+      items.push({ id: 'projects-loading', label: 'Loading projects...', kind: 'disabled' });
+    } else {
+      // Add "Create a new project" button at the start of projects list
+      items.push({ 
+        id: 'create', 
+        label: '+ Create a new project', 
+        onClick: createNewProject, 
+        kind: 'create' 
       });
 
-      return items;
-    }
-
-    if (view === 'projects') {
-      return [
-        { id: 'home', label: 'Go back', onClick: goHome, active: false },
-        { id: 'projects-title', label: 'Projects', kind: 'title' },
-        ...projects.map((project) => ({
+      projects.forEach((project) => {
+        const isExpanded = expandedProjectId === project.id;
+        const isSelected = selectedProjectId === project.id;
+        
+        // Add project item
+        items.push({
           id: project.id,
           label: project.name,
           onClick: () => goToProject(project.id),
-          active: false,
+          active: isSelected,
           kind: 'project',
+          expanded: isExpanded,
           onDelete: () => handleDeleteProject(project.id),
-        })),
-        { id: 'create', label: 'Create a new project', onClick: createNewProject, kind: 'create' },
-      ];
+        });
+
+        // If this project is expanded, show its chats nested underneath
+        if (isExpanded) {
+          items.push({ id: `${project.id}-chats-title`, label: 'Chats', kind: 'title', nested: true });
+
+          // Add "New Chat" button at the start of chats list
+          if (selectedProjectId && selectedProjectId !== 'new') {
+            items.push({
+              id: `${project.id}-new-chat`,
+              label: '+ New Chat',
+              onClick: handleCreateNewChat,
+              active: false,
+              kind: 'create',
+              nested: true,
+            });
+          }
+
+          if (loadingChats) {
+            items.push({ 
+              id: `${project.id}-chats-loading`, 
+              label: 'Loading chats...', 
+              kind: 'disabled',
+              nested: true 
+            });
+          } else if (chats.length === 0) {
+            items.push({ 
+              id: `${project.id}-chats-empty`, 
+              label: 'No chats available', 
+              kind: 'disabled',
+              nested: true 
+            });
+          } else {
+            chats.forEach((chat) => {
+              items.push({
+                id: chat.id,
+                label: chat.title || 'Untitled Chat',
+                onClick: () => selectChat(chat.id),
+                active: selectedChatId === chat.id,
+                kind: 'chat',
+                nested: true,
+                onDelete: () => handleDeleteChat(chat.id),
+              });
+            });
+          }
+
+          items.push({
+            id: `${project.id}-history`,
+            label: 'View history',
+            onClick: () => setProjectPage('history'),
+            active: projectPage === 'history',
+            nested: true,
+          });
+        }
+      });
     }
 
-    return [
-      { id: 'home', label: 'Home', onClick: goHome, active: view === 'home' },
-      { id: 'projects', label: 'Projects', onClick: showProjects, active: view === 'projects' },
-    ];
-  }, [view, projectPage, goHome, showProjects, chats, loadingChats, selectedChatId, selectedProjectId, projects, handleDeleteProject, handleDeleteChat]);
+    return items;
+  }, [
+    view, 
+    projectPage, 
+    goHome, 
+    chats, 
+    loadingChats, 
+    loadingProjects,
+    selectedChatId, 
+    selectedProjectId, 
+    expandedProjectId,
+    projects, 
+    handleDeleteProject, 
+    handleDeleteChat,
+    handleCreateNewChat,
+    selectChat,
+    goToProject,
+    createNewProject
+  ]);
 
   const renderAuth = () => (
     <div className="auth-shell">
@@ -683,54 +777,61 @@ function App() {
   );
 
   const renderProjectDetail = () => {
-    const title =
-      selectedProject?.name || (selectedProjectId === 'new' ? 'New Project' : 'Project');
     const selectedChat = chats.find((c) => c.id === selectedChatId);
 
-    return (
-      <div className="section">
-        <p className="eyebrow">Project</p>
-        <h1>{title}</h1>
-        <p className="muted">
-          {projectPage === 'chat'
-            ? selectedChat
-              ? `Chat workspace: ${selectedChat.title}`
-              : 'Chat workspace for collaboration and brainstorming.'
-            : 'Past activity, changes, and transcripts for this project.'}
-        </p>
-
-        {projectPage === 'chat' ? (
-          <div className="panel chat-panel">
-            {selectedProjectId === 'new' ? (
-              <div className="placeholder">
-                Create a project to start chatting.
-              </div>
-            ) : selectedChat ? (
-              <ChatInterface
-                chatId={selectedChat.id}
-                nodes={nodes}
-                onSendMessage={handleSendMessage}
-                isLoading={isSendingMessage}
-              />
-            ) : loadingChats ? (
-              <div className="placeholder">Loading chats...</div>
-            ) : chats.length === 0 ? (
-              <div className="placeholder">
-                <p>No chats yet. Create a new chat to get started!</p>
-                <button
-                  className="button primary"
-                  onClick={handleCreateNewChat}
-                  disabled={isCreatingChat}
-                  style={{ marginTop: '16px' }}
-                >
-                  {isCreatingChat ? 'Creating...' : 'Create New Chat'}
-                </button>
-              </div>
-            ) : (
-              <div className="placeholder">Select a chat to start messaging</div>
-            )}
+    if (projectPage === 'chat') {
+      if (selectedProjectId === 'new') {
+        return (
+          <div className="section">
+            <div className="placeholder">
+              Create a project to start chatting.
+            </div>
           </div>
-        ) : (
+        );
+      } else if (selectedChat) {
+        return (
+          <ChatInterface
+            chatId={selectedChat.id}
+            chatTitle={selectedChat.title || 'Untitled Chat'}
+            nodes={nodes}
+            onSendMessage={handleSendMessage}
+            onToggleFlag={handleToggleFlag}
+            isLoading={isSendingMessage}
+          />
+        );
+      } else if (loadingChats) {
+        return (
+          <div className="section">
+            <div className="placeholder">Loading chats...</div>
+          </div>
+        );
+      } else if (chats.length === 0) {
+        return (
+          <div className="section">
+            <div className="placeholder">
+              <p>No chats yet. Create a new chat to get started!</p>
+              <button
+                className="button primary"
+                onClick={handleCreateNewChat}
+                disabled={isCreatingChat}
+                style={{ marginTop: '16px' }}
+              >
+                {isCreatingChat ? 'Creating...' : 'Create New Chat'}
+              </button>
+            </div>
+          </div>
+        );
+      } else {
+        return (
+          <div className="section">
+            <div className="placeholder">Select a chat to start messaging</div>
+          </div>
+        );
+      }
+    } else {
+      // History view
+      return (
+        <div className="section">
           <div className="panel">
             {loadingNodes ? (
               <div className="placeholder">Loading history...</div>
@@ -757,9 +858,9 @@ function App() {
               <div className="placeholder">No history available for this chat.</div>
             )}
           </div>
-        )}
-      </div>
-    );
+        </div>
+      );
+    }
   };
 
   if (!isAuthed) {
@@ -778,6 +879,8 @@ function App() {
             const classes = ['nav-item'];
             if (item.kind) classes.push(item.kind);
             if (item.active) classes.push('active');
+            if (item.expanded) classes.push('expanded');
+            if (item.nested) classes.push('nested');
 
             if (item.kind === 'title') {
               return (
@@ -838,13 +941,7 @@ function App() {
         </div>
       </aside>
 
-      <main className="main">
-        {view === 'projectDetail' && currentProjectTitle && !selectedChatId && (
-          <div className="page-banner">
-            <p className="eyebrow">Active project</p>
-            <h2>{currentProjectTitle}</h2>
-          </div>
-        )}
+      <main className={`main ${view === 'projectDetail' && projectPage === 'chat' && selectedChatId ? 'chat-view' : ''}`}>
         {view === 'home' && renderHome()}
         {view === 'projects' && renderProjects()}
         {view === 'projectDetail' && renderProjectDetail()}

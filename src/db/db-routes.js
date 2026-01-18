@@ -423,6 +423,7 @@ async function updateNode(req, res) {
   try {
     const nodeId = req.params.id;
     console.log("Updating node:", nodeId);
+    console.log("Request body:", req.body);
     
     if (!ObjectId.isValid(nodeId)) {
       return res.status(400).json({ error: 'Invalid node ID' });
@@ -447,28 +448,60 @@ async function updateNode(req, res) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
     
-    const result = await db.collection('nodes').findOneAndUpdate(
-      { _id: new ObjectId(nodeId) },
-      { $set: updateFields },
-      { returnDocument: 'after' }
+    // Check if node exists first for better error reporting
+    const nodeObjectId = ObjectId.createFromHexString(nodeId);
+    const existingNode = await db.collection('nodes').findOne({ _id: nodeObjectId });
+    
+    if (!existingNode) {
+      console.log(`Node with ID ${nodeId} not found in database`);
+      // Try to find any nodes to help debug
+      const allNodes = await db.collection('nodes').find({}).limit(5).toArray();
+      console.log(`Sample nodes in database:`, allNodes.map(n => ({ id: n._id.toString(), type: n.type, chatId: n.chatId })));
+      return res.status(404).json({ error: 'Node not found', nodeId: nodeId });
+    }
+    
+    console.log(`Found existing node:`, { 
+      id: existingNode._id.toString(), 
+      type: existingNode.type, 
+      currentFlagged: existingNode.isFlagged,
+      updatingTo: updateFields 
+    });
+    
+    // Use updateOne and then fetch the updated document
+    const updateResult = await db.collection('nodes').updateOne(
+      { _id: nodeObjectId },
+      { $set: updateFields }
     );
     
-    if (!result.value) {
+    if (updateResult.matchedCount === 0) {
+      console.error('No node matched for update');
       return res.status(404).json({ error: 'Node not found' });
     }
     
+    if (updateResult.modifiedCount === 0) {
+      console.log('Node found but no changes were made (value may be the same)');
+    }
+    
+    // Fetch the updated document
+    const updatedDocument = await db.collection('nodes').findOne({ _id: nodeObjectId });
+    
+    if (!updatedDocument) {
+      console.error('Could not fetch updated node');
+      return res.status(500).json({ error: 'Failed to retrieve updated node' });
+    }
+    
     const updatedNode = {
-      id: result.value._id.toString(),
-      chatId: result.value.chatId,
-      parentId: result.value.parentId || null,
-      type: result.value.type,
-      content: result.value.content,
-      isFlagged: result.value.isFlagged || false,
-      timestamp: result.value.timestamp,
-      metadata: result.value.metadata || {}
+      id: updatedDocument._id.toString(),
+      chatId: updatedDocument.chatId,
+      parentId: updatedDocument.parentId || null,
+      type: updatedDocument.type,
+      content: updatedDocument.content,
+      isFlagged: updatedDocument.isFlagged || false,
+      timestamp: updatedDocument.timestamp,
+      metadata: updatedDocument.metadata || {}
     };
     
-    console.log('Updated node:', updatedNode);
+    console.log('Successfully updated node:', updatedNode);
     res.json(updatedNode);
   } catch (error) {
     console.error('Error updating node:', error);
