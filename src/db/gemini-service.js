@@ -89,7 +89,47 @@ async function generateSimpleResponse(userMessage) {
   }
 }
 
+/**
+ * Generate a chat title from user prompt using keyword extraction
+ * @param {string} userPrompt - The user's first message/prompt
+ * @returns {Promise<string>} - A concise title based on keywords
+ */
+async function generateChatTitle(userPrompt) {
+  try {
+    console.log('Generating chat title from prompt:', userPrompt);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const prompt = `Extract 3-5 key words or a short phrase (max 6 words) that best describes this user query. Return only the keywords/phrase, nothing else. Make it concise and descriptive:\n\n${userPrompt}`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const title = response.text().trim();
+
+    // Clean up the title - remove quotes if present, limit length
+    let cleanTitle = title.replace(/^["']|["']$/g, '').trim();
+    
+    // If title is too long, truncate it
+    if (cleanTitle.length > 50) {
+      cleanTitle = cleanTitle.substring(0, 47) + '...';
+    }
+
+    // Fallback if title is empty or too short
+    if (!cleanTitle || cleanTitle.length < 2) {
+      cleanTitle = userPrompt.substring(0, 30).trim() + (userPrompt.length > 30 ? '...' : '');
+    }
+
+    console.log('Generated chat title:', cleanTitle);
+    return cleanTitle;
+  } catch (error) {
+    console.error('Error generating chat title:', error);
+    // Fallback to a simple extraction from the prompt
+    const words = userPrompt.split(/\s+/).slice(0, 5).join(' ');
+    return words.length > 0 ? words : 'New Chat';
+  }
+}
+
 module.exports = {
   generateGeminiResponse,
-  generateSimpleResponse
+  generateSimpleResponse,
+  generateChatTitle
 };

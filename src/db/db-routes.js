@@ -16,7 +16,7 @@
 
 const { client } = require('./db');
 const { ObjectId } = require('mongodb');
-const { generateGeminiResponse } = require('./gemini-service');
+const { generateGeminiResponse, generateChatTitle } = require('./gemini-service');
 
 // Hardcoded userId for now (as mentioned in requirements)
 const HARDCODED_USER_ID = 'demo';
@@ -86,6 +86,63 @@ async function createProject(req, res) {
   } catch (error) {
     console.error('Error creating project:', error);
     res.status(500).json({ error: 'Failed to create project', message: error.message });
+  }
+}
+
+// PATCH /api/projects/:id - Update a project
+async function updateProject(req, res) {
+  try {
+    const projectId = req.params.id;
+    console.log("Updating project:", projectId);
+    const { name, description } = req.body;
+    
+    if (!ObjectId.isValid(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Project name is required' });
+    }
+    
+    const db = await getDb();
+    
+    // Verify project exists
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Build update object
+    const updateFields = { name: name.trim() };
+    if (description !== undefined) {
+      updateFields.description = description || '';
+    }
+    
+    // Update the project
+    const updateResult = await db.collection('projects').updateOne(
+      { _id: new ObjectId(projectId) },
+      { $set: updateFields }
+    );
+    
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Fetch the updated document
+    const updatedProject = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+    
+    const formattedProject = {
+      id: updatedProject._id.toString(),
+      name: updatedProject.name,
+      description: updatedProject.description || '',
+      createdAt: updatedProject.createdAt || new Date().toISOString()
+    };
+    
+    console.log('Successfully updated project:', formattedProject);
+    res.json(formattedProject);
+  } catch (error) {
+    console.error('Error updating project:', error);
+    res.status(500).json({ error: 'Failed to update project', message: error.message });
   }
 }
 
@@ -247,6 +304,62 @@ async function createChat(req, res) {
   }
 }
 
+// PATCH /api/chats/:id - Update a chat
+async function updateChat(req, res) {
+  try {
+    const chatId = req.params.id;
+    console.log("Updating chat:", chatId);
+    const { title } = req.body;
+    
+    if (!ObjectId.isValid(chatId)) {
+      return res.status(400).json({ error: 'Invalid chat ID' });
+    }
+    
+    if (!title || title.trim() === '') {
+      return res.status(400).json({ error: 'Chat title is required' });
+    }
+    
+    const db = await getDb();
+    
+    // Verify chat exists
+    const chat = await db.collection('chats').findOne({ _id: new ObjectId(chatId) });
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    // Update the chat
+    const updateResult = await db.collection('chats').updateOne(
+      { _id: new ObjectId(chatId) },
+      { 
+        $set: { 
+          title: title.trim(),
+          lastUpdated: new Date().toISOString()
+        } 
+      }
+    );
+    
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+    
+    // Fetch the updated document
+    const updatedChat = await db.collection('chats').findOne({ _id: new ObjectId(chatId) });
+    
+    const formattedChat = {
+      id: updatedChat._id.toString(),
+      projectId: typeof updatedChat.projectId === 'object' ? updatedChat.projectId.toString() : updatedChat.projectId,
+      title: updatedChat.title,
+      lastUpdated: updatedChat.lastUpdated
+    };
+    
+    console.log('Successfully updated chat:', formattedChat);
+    res.json(formattedChat);
+  } catch (error) {
+    console.error('Error updating chat:', error);
+    res.status(500).json({ error: 'Failed to update chat', message: error.message });
+  }
+}
+
 // DELETE /api/chats/:id - Delete a chat and all its nodes (cascade)
 async function deleteChat(req, res) {
   try {
@@ -385,6 +498,35 @@ async function createNode(req, res) {
       if (!parent) {
         return res.status(404).json({ error: 'Parent node not found' });
       }
+    }
+    
+    // Auto-name chat if this is the first USER message (no parentId) and title is still "New Chat"
+    // Do this asynchronously so it doesn't block the node creation response
+    if (type === 'USER' && !parentId && chat.title === 'New Chat') {
+      // Start title generation in the background (fire and forget)
+      // This allows the node creation to return immediately
+      (async () => {
+        try {
+          console.log('Auto-naming chat from first user message (async)');
+          const generatedTitle = await generateChatTitle(content);
+          
+          // Update chat title
+          const dbForUpdate = await getDb();
+          await dbForUpdate.collection('chats').updateOne(
+            { _id: new ObjectId(chatId) },
+            { 
+              $set: { 
+                title: generatedTitle,
+                lastUpdated: new Date().toISOString()
+              } 
+            }
+          );
+          console.log(`Auto-named chat ${chatId} to: ${generatedTitle}`);
+        } catch (error) {
+          console.error('Error auto-naming chat:', error);
+          // Don't fail node creation if title generation fails
+        }
+      })();
     }
     
     const newNode = {
@@ -564,9 +706,11 @@ async function generateAIMessage(req, res) {
 module.exports = {
   getAllProjects,
   createProject,
+  updateProject,
   deleteProject,
   getProjectChats,
   createChat,
+  updateChat,
   deleteChat,
   getChatNodes,
   createNode,

@@ -8,9 +8,11 @@ const cors = require('cors');
 const {
   getAllProjects,
   createProject,
+  updateProject,
   deleteProject,
   getProjectChats,
   createChat,
+  updateChat,
   deleteChat,
   getChatNodes,
   createNode,
@@ -32,6 +34,9 @@ app.get('/api/projects', getAllProjects);
 // POST /api/projects - Create a new project workspace
 app.post('/api/projects', createProject);
 
+// PATCH /api/projects/:id - Update a project
+app.patch('/api/projects/:id', updateProject);
+
 // DELETE /api/projects/:id - Delete a project and all its chats and nodes (cascade)
 app.delete('/api/projects/:id', deleteProject);
 
@@ -41,6 +46,9 @@ app.get('/api/projects/:id/chats', getProjectChats);
 
 // POST /api/chats - Initialize a new chat session
 app.post('/api/chats', createChat);
+
+// PATCH /api/chats/:id - Update a chat
+app.patch('/api/chats/:id', updateChat);
 
 // DELETE /api/chats/:id - Delete a chat and all its nodes (cascade)
 app.delete('/api/chats/:id', deleteChat);
