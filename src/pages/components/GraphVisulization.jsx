@@ -73,6 +73,67 @@ export default function TreeGraph(props) {
         viewport.attr("transform", transformToRestore);
     }
 
+    // Legend data - matches current node styling
+    const legendData = [
+        { label: "Root", fill: "#000000", stroke: "#ff0000", radius: 12, strokeWidth: 2, emoji: "" },
+        { label: "Current Chat", fill: "#000000", stroke: "#4682B4", radius: 12, strokeWidth: 2, emoji: "" },
+        { label: "Flagged", fill: "#000000", stroke: "#ffA500", radius: 12, strokeWidth: 2, emoji: "🏳️" },
+        { label: "Response", fill: "#999", stroke: "none", radius: 6, strokeWidth: 0, emoji: "" }
+    ];
+
+    // Create legend group (fixed position, not affected by zoom)
+    const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", "translate(20, 20)");
+
+    // Add semi-transparent background for legend
+    legend.append("rect")
+        .attr("x", -10)
+        .attr("y", -15)
+        .attr("width", 135)
+        .attr("height", legendData.length * 28 + 15)
+        .attr("rx", 6)
+        .attr("ry", 6)
+        .attr("fill", "rgba(0, 0, 0, 0.7)")
+        .attr("stroke", "rgba(111, 242, 214, 0.5)")
+        .attr("stroke-width", 1);
+
+    // Add legend items
+    const legendItems = legend.selectAll(".legend-item")
+        .data(legendData)
+        .join("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(0, ${i * 28})`);
+
+    // Add circles for each legend item
+    legendItems.append("circle")
+        .attr("cx", 12)
+        .attr("cy", 0)
+        .attr("r", d => d.radius)
+        .attr("fill", d => d.fill)
+        .attr("stroke", d => d.stroke)
+        .attr("stroke-width", d => d.strokeWidth);
+
+    // Add emoji for flagged node
+    legendItems.append("text")
+        .attr("x", 12)
+        .attr("y", 0)
+        .attr("dy", "0.35em")
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "10px")
+        .style("pointer-events", "none")
+        .text(d => d.emoji);
+
+    // Add labels
+    legendItems.append("text")
+        .attr("x", 30)
+        .attr("y", 0)
+        .attr("dy", "0.35em")
+        .attr("fill", "#ccc")
+        .style("font-size", "12px")
+        .text(d => d.label);
+
     // Build original hierarchy to identify leaf nodes
     const originalStratify = d3.stratify()
         .id(d => d.id)
@@ -198,16 +259,21 @@ export default function TreeGraph(props) {
 
     nodeSelection.append("circle")
         .attr("fill", d => {
+        if (d.data.parentId === null) {
+            return "#000000"; // Black for Root Node
+        }
         if (d.data.id === currentNodeId) {
-            return "#555"; // Dark Gray for the Active Node
+            return "#000000"; // Black for the Active Node
         }
         if (d.data.isFlagged) {
-            return "#000000"; // Orange/Gold for Flagged Nodes
+            return "#000000"; // Black for Flagged Nodes
         }
         return "#999"; // Light Gray for Regular Nodes
     })
     .attr("stroke", d => {
-        // Current node styling trumps flagged styling
+        if (d.data.parentId === null) {
+            return "#ff0000"; // Red for root node
+        }
         if (d.data.id === currentNodeId) {
             return "#4682B4"; // Blue for current node
         }
@@ -217,7 +283,7 @@ export default function TreeGraph(props) {
         return "#4682B4"; // Default blue
     })
     .attr("stroke-width", d => 
-        d.data.id === currentNodeId || d.data.isFlagged ? 2 : 0                             
+        d.data.parentId === null || d.data.id === currentNodeId || d.data.isFlagged ? 2 : 0                             
     )
     .attr("r", d => {
         if (d.data.id === currentNodeId) {
