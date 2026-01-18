@@ -25,6 +25,10 @@ const HOME_FEATURES = [
 
 function App() {
   const [view, setView] = useState('home'); // 'home' | 'projects' | 'projectDetail'
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [authEmail, setAuthEmail] = useState('demo@thoughttree.ai');
+  const [authPassword, setAuthPassword] = useState('demo123');
+  const [authError, setAuthError] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [projectPage, setProjectPage] = useState('chat'); // 'chat' | 'history'
 
@@ -62,6 +66,24 @@ function App() {
     setProjectPage('chat');
   };
 
+  const handleLogin = (e) => {
+    e?.preventDefault();
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError('Enter an email and password to continue the demo.');
+      return;
+    }
+    setAuthError('');
+    setIsAuthed(true);
+    goHome();
+  };
+
+  const handleLogout = () => {
+    setIsAuthed(false);
+    setSelectedProjectId(null);
+    setProjectPage('chat');
+    setView('home');
+  };
+
   const navItems = useMemo(() => {
     if (view === 'projectDetail') {
       return [
@@ -90,7 +112,44 @@ function App() {
       { id: 'home', label: 'Home', onClick: goHome, active: view === 'home' },
       { id: 'projects', label: 'Projects', onClick: showProjects, active: view === 'projects' },
     ];
-  }, [view, projectPage]);
+  }, [view, projectPage, goHome, showProjects]);
+
+  const renderAuth = () => (
+    <div className="auth-shell">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <img src={branchLogo} alt="ThoughtTree logo" />
+          <span>ThoughtTree</span>
+        </div>
+        <p className="muted small">Please log in to continue.</p>
+        <form className="auth-form" onSubmit={handleLogin}>
+          <label>
+            <span>Email</span>
+            <input
+              type="email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              placeholder="demo@thoughttree.ai"
+            />
+          </label>
+          <label>
+            <span>Password</span>
+            <input
+              type="password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              placeholder="demo123"
+            />
+          </label>
+          {authError && <p className="auth-error">{authError}</p>}
+          <button type="submit" className="button primary full">Enter demo</button>
+          <button type="button" className="button ghost full" onClick={handleLogin}>
+            Skip (demo mode)
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 
   const renderHome = () => (
     <div className="home">
@@ -208,6 +267,10 @@ function App() {
     );
   };
 
+  if (!isAuthed) {
+    return renderAuth();
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -242,7 +305,7 @@ function App() {
           })}
         </nav>
         <div className="nav-footer">
-          <button className="nav-item danger">Log out</button>
+          <button className="nav-item danger" onClick={handleLogout}>Log out</button>
         </div>
       </aside>
 
