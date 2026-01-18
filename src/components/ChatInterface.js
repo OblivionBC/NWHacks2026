@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 import './ChatInterface.css';
 
-function ChatInterface({ chatId, nodes, onSendMessage, isLoading }) {
+function ChatInterface({ chatId, chatTitle, nodes, onSendMessage, onToggleFlag, isLoading }) {
   const [message, setMessage] = useState('');
   const messagesEndRef = useRef(null);
+  const prevNodesLengthRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Only scroll to bottom if new messages were added (length increased)
+    // This preserves scroll position when only node properties change (like flagging)
+    if (nodes.length > prevNodesLengthRef.current) {
+      scrollToBottom();
+    }
+    prevNodesLengthRef.current = nodes.length;
   }, [nodes]);
 
   const handleSubmit = (e) => {
@@ -33,20 +39,39 @@ function ChatInterface({ chatId, nodes, onSendMessage, isLoading }) {
 
   return (
     <div className="chat-interface">
+      <div className="chat-header">
+        <h2 className="chat-title">{chatTitle || 'Untitled Chat'}</h2>
+      </div>
       <div className="chat-messages">
         {nodes.length === 0 ? (
           <div className="chat-empty">
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          nodes.map((node) => (
-            <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
-              <div className="message-header">
-                <span className="message-type">{node.type}</span>
+          nodes.map((node) => {
+            // Only show flag for AI messages that are not root messages
+            const canFlag = node.type === 'AI' && node.parentId !== null;
+            
+            return (
+              <div key={node.id} className={`message ${node.type.toLowerCase()}`}>
+                <div className="message-header">
+                  <span className="message-type">{node.type}</span>
+                  {canFlag && (
+                    <button
+                      type="button"
+                      className={`message-flag ${node.isFlagged ? 'flagged' : ''}`}
+                      onClick={() => onToggleFlag(node.id, node.isFlagged)}
+                      aria-label={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                      title={node.isFlagged ? 'Remove checkpoint' : 'Add checkpoint'}
+                    >
+                      🏳️
+                    </button>
+                  )}
+                </div>
+                <div className="message-content">{node.content}</div>
               </div>
-              <div className="message-content">{node.content}</div>
-            </div>
-          ))
+            );
+          })
         )}
         {isLoading && (
           <div className="message ai loading">

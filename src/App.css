@@ -192,18 +192,25 @@ body {
 }
 
 .nav-item.project {
-  background: linear-gradient(135deg, rgba(124, 107, 255, 0.16), rgba(48, 131, 220, 0.14));
-  border-color: rgba(124, 107, 255, 0.3);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.08), rgba(0, 0, 0, 0.6));
+  border-color: rgba(124, 107, 255, 0.2);
   font-weight: 600;
-  box-shadow: 0 10px 22px rgba(124, 107, 255, 0.15);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.2);
+}
+
+.nav-item.project.active {
+  background: linear-gradient(135deg, rgba(124, 107, 255, 0.35), rgba(48, 131, 220, 0.3));
+  border-color: rgba(124, 107, 255, 0.6);
+  box-shadow: 0 12px 28px rgba(124, 107, 255, 0.3);
 }
 
 .nav-item.create {
   background: linear-gradient(135deg, rgba(111, 242, 214, 0.35), rgba(124, 107, 255, 0.28), rgba(48, 131, 220, 0.25));
   border-color: rgba(111, 242, 214, 0.6);
   border-width: 2px;
-  font-weight: 800;
-  font-size: 15px;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 12px;
   box-shadow: 0 8px 24px rgba(111, 242, 214, 0.35), 0 0 20px rgba(124, 107, 255, 0.2);
   position: relative;
   overflow: hidden;
@@ -235,6 +242,21 @@ body {
   animation: none;
 }
 
+.nav-item.create.nested {
+  background: linear-gradient(135deg, rgba(111, 242, 214, 0.35), rgba(124, 107, 255, 0.28), rgba(48, 131, 220, 0.25));
+  border-color: rgba(111, 242, 214, 0.6);
+  border-width: 2px;
+  border-left-color: rgba(111, 242, 214, 0.6);
+  box-shadow: 0 8px 24px rgba(111, 242, 214, 0.35), 0 0 20px rgba(124, 107, 255, 0.2);
+}
+
+.nav-item.create.nested:hover {
+  border-color: rgba(111, 242, 214, 0.85);
+  border-left-color: rgba(111, 242, 214, 0.85);
+  background: linear-gradient(135deg, rgba(111, 242, 214, 0.45), rgba(124, 107, 255, 0.35), rgba(48, 131, 220, 0.3));
+  box-shadow: 0 12px 32px rgba(111, 242, 214, 0.45), 0 0 30px rgba(124, 107, 255, 0.3);
+}
+
 @keyframes subtle-pulse {
   0%, 100% {
     box-shadow: 0 8px 24px rgba(111, 242, 214, 0.35), 0 0 20px rgba(124, 107, 255, 0.2);
@@ -259,8 +281,83 @@ body {
 
 .nav-item.chat.active {
   border-color: var(--brilliant-azure);
-  background: linear-gradient(135deg, rgba(48, 131, 220, 0.4), rgba(124, 107, 255, 0.28));
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.35), rgba(124, 107, 255, 0.3));
   box-shadow: 0 12px 28px rgba(48, 131, 220, 0.3), 0 0 16px rgba(111, 242, 214, 0.2);
+  border-left-color: rgba(111, 242, 214, 0.5);
+}
+
+.nav-item.expanded {
+  border-color: rgba(111, 242, 214, 0.5);
+  background: linear-gradient(135deg, rgba(124, 107, 255, 0.24), rgba(48, 131, 220, 0.18));
+  box-shadow: 0 12px 28px rgba(124, 107, 255, 0.2);
+}
+
+.nav-item.nested {
+  margin-left: 20px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-left: 2px solid rgba(111, 242, 214, 0.2);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.06), rgba(0, 0, 0, 0.65));
+  transition: all 0.2s ease;
+}
+
+.nav-item.nested.title {
+  margin-left: 20px;
+  padding: 6px 2px;
+  font-size: 11px;
+  border-left: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nav-item.nested:hover {
+  border-left-color: rgba(111, 242, 214, 0.4);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.12), rgba(0, 0, 0, 0.6));
+}
+
+.nav-item.active.nested {
+  transform: translateX(0);
+}
+
+.nav-item.chat.active {
+  border-color: var(--brilliant-azure);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.35), rgba(124, 107, 255, 0.3));
+  box-shadow: 0 12px 28px rgba(48, 131, 220, 0.3), 0 0 16px rgba(111, 242, 214, 0.2);
+  border-left-color: rgba(111, 242, 214, 0.5);
+}
+
+.nav-item.chat.active.nested {
+  transform: translateX(0);
+  border-left-color: rgba(111, 242, 214, 0.5);
+}
+
+.nav-item.expanded {
+  border-color: rgba(111, 242, 214, 0.5);
+  background: linear-gradient(135deg, rgba(124, 107, 255, 0.24), rgba(48, 131, 220, 0.18));
+  box-shadow: 0 12px 28px rgba(124, 107, 255, 0.2);
+}
+
+.nav-item.nested {
+  margin-left: 20px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-left: 2px solid rgba(111, 242, 214, 0.2);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.06), rgba(0, 0, 0, 0.65));
+  transition: all 0.2s ease;
+}
+
+.nav-item.nested.title {
+  margin-left: 20px;
+  padding: 6px 2px;
+  font-size: 11px;
+  border-left: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.nav-item.nested:hover {
+  border-left-color: rgba(111, 242, 214, 0.4);
+  background: linear-gradient(135deg, rgba(48, 131, 220, 0.12), rgba(0, 0, 0, 0.6));
 }
 
 .nav-item.danger {
@@ -326,6 +423,12 @@ body {
     radial-gradient(circle at 85% 10%, rgba(255, 122, 195, 0.08), transparent 35%);
   position: relative;
   overflow: hidden;
+}
+
+.main.chat-view {
+  padding: 0;
+  gap: 0;
+  height: 100vh;
 }
 
 .home {
